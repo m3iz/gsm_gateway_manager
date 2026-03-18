@@ -6,7 +6,6 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                              QMessageBox, QProgressBar)
 from PyQt6.QtCore import Qt, pyqtSignal, QTimer
 import random
-import string
 
 class ImeiPanel(QWidget):
     imei_changed = pyqtSignal(str)
@@ -27,9 +26,9 @@ class ImeiPanel(QWidget):
         form_layout.setSpacing(5)
         form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         
-        # Current IMEI display
+        # Current IMEI display - Unknown in RED
         self.current_imei_label = QLabel(self.current_imei)
-        self.current_imei_label.setStyleSheet("font-weight: bold; color: #4CAF50; font-family: monospace; font-size: 12pt;")
+        self.current_imei_label.setStyleSheet("color: #ff5555; font-family: monospace; font-size: 10pt; font-weight: bold;")
         self.current_imei_label.setWordWrap(True)
         form_layout.addRow("Current IMEI:", self.current_imei_label)
         
@@ -53,14 +52,13 @@ class ImeiPanel(QWidget):
         # Buttons row
         buttons_layout = QHBoxLayout()
         
-        self.generate_btn = QPushButton("🎲 Generate Valid IMEI")
+        self.generate_btn = QPushButton("🎲 Generate IMEI")
         self.generate_btn.clicked.connect(self.generate_imei)
-        self.generate_btn.setMinimumWidth(150)
+        self.generate_btn.setMinimumWidth(120)
         
-        self.set_btn = QPushButton("✓ Set IMEI")
+        self.set_btn = QPushButton("Set IMEI")
         self.set_btn.clicked.connect(self.set_imei)
         self.set_btn.setMinimumWidth(100)
-        self.set_btn.setStyleSheet("background-color: #4CAF50; color: white;")
         
         buttons_layout.addWidget(self.generate_btn)
         buttons_layout.addWidget(self.set_btn)
@@ -69,8 +67,8 @@ class ImeiPanel(QWidget):
         form_layout.addRow("", buttons_layout)
         
         # Warning label
-        warning_label = QLabel("⚠️ Warning: Changing IMEI may be illegal in some countries!")
-        warning_label.setStyleSheet("color: #ff9900; font-size: 9pt;")
+        warning_label = QLabel("⚠️ Changing IMEI may be illegal in some countries!")
+        warning_label.setStyleSheet("color: #ff9900; font-size: 8pt;")
         warning_label.setWordWrap(True)
         form_layout.addRow("", warning_label)
         
@@ -103,7 +101,8 @@ class ImeiPanel(QWidget):
     def read_imei(self):
         """Read IMEI from modem using AT command."""
         if not self.modem.connected:
-            QMessageBox.warning(self, "Not Connected", "Modem is not connected!")
+            self.current_imei_label.setText("Not connected")
+            self.current_imei_label.setStyleSheet("color: #888; font-family: monospace;")
             return
         
         self.status_label.setText("Reading IMEI...")
@@ -127,7 +126,8 @@ class ImeiPanel(QWidget):
                 if line and len(line.strip()) == 15 and line.strip().isdigit():
                     self.current_imei = line.strip()
                     self.current_imei_label.setText(self.current_imei)
-                    self.status_label.setText(f"IMEI read: {self.current_imei}")
+                    self.current_imei_label.setStyleSheet("color: #4CAF50; font-family: monospace; font-weight: bold;")
+                    self.status_label.setText(f"IMEI read successfully")
                     self.progress_bar.hide()
                     self.imei_changed.emit(self.current_imei)
                     return
@@ -139,22 +139,22 @@ class ImeiPanel(QWidget):
                         if len(imei) == 15 and imei.isdigit():
                             self.current_imei = imei
                             self.current_imei_label.setText(self.current_imei)
-                            self.status_label.setText(f"IMEI read: {self.current_imei}")
+                            self.current_imei_label.setStyleSheet("color: #4CAF50; font-family: monospace; font-weight: bold;")
+                            self.status_label.setText(f"IMEI read successfully")
                             self.progress_bar.hide()
                             self.imei_changed.emit(self.current_imei)
                             return
         
         self.status_label.setText("Failed to read IMEI")
+        self.current_imei_label.setText("Read failed")
+        self.current_imei_label.setStyleSheet("color: #ff5555; font-family: monospace;")
         self.progress_bar.hide()
         self.logger.error("Could not read IMEI from modem")
     
     def generate_imei(self):
         """Generate a valid IMEI number (15 digits with Luhn checksum)."""
         # Generate first 14 digits (TAC + SNR)
-        # TAC (8 digits) - Type Allocation Code
         tac = f"{random.randint(10000000, 99999999)}"
-        
-        # SNR (6 digits) - Serial Number
         snr = f"{random.randint(100000, 999999)}"
         
         # Combine first 14 digits
@@ -238,11 +238,11 @@ class ImeiPanel(QWidget):
         self.progress_bar.hide()
         
         if success:
-            self.status_label.setText("IMEI set successfully! Rebooting modem...")
+            self.status_label.setText("IMEI set successfully! Rebooting...")
             self.logger.info(f"IMEI changed to: {new_imei}")
             
             # Some modems need reboot
-            self.modem.serial.send_command("AT+CFUN=1,1", timeout=1)  # Reset command
+            self.modem.serial.send_command("AT+CFUN=1,1", timeout=1)
             
             QMessageBox.information(
                 self, 
@@ -269,4 +269,5 @@ class ImeiPanel(QWidget):
             self.generate_btn.setEnabled(False)
             self.set_btn.setEnabled(False)
             self.current_imei_label.setText("Not connected")
+            self.current_imei_label.setStyleSheet("color: #888; font-family: monospace;")
             self.status_label.setText("Disconnected")

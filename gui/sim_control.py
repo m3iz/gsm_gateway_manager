@@ -1,46 +1,64 @@
 """
-SIM selection panel with radio buttons and auto failover option.
+SIM selection panel with radio buttons in horizontal layout.
 """
-from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QGroupBox,
-                             QRadioButton, QButtonGroup, QCheckBox)
-from PyQt6.QtCore import pyqtSignal
-from gsm.gsm_modem import GsmModem
+from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
+                             QRadioButton, QButtonGroup, QCheckBox, QLabel)
+from PyQt6.QtCore import pyqtSignal, Qt
 
 class SimControlPanel(QWidget):
     sim_changed = pyqtSignal(int)
 
-    def __init__(self, modem: GsmModem, logger):
+    def __init__(self, modem, logger):
         super().__init__()
         self.modem = modem
         self.logger = logger
         self.init_ui()
 
     def init_ui(self):
+        # Main layout
         layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
-
+        layout.setContentsMargins(5, 5, 5, 5)
+        
+        # Group box
         group = QGroupBox("SIM Control")
         group_layout = QVBoxLayout()
-
+        group_layout.setSpacing(10)
+        
+        # Radio buttons in horizontal layout
+        radio_widget = QWidget()
+        radio_layout = QHBoxLayout(radio_widget)
+        radio_layout.setContentsMargins(0, 0, 0, 0)
+        radio_layout.setSpacing(30)
+        
         self.sim1_radio = QRadioButton("SIM 1")
         self.sim2_radio = QRadioButton("SIM 2")
-        self.sim1_radio.setChecked(True)  # Default
-
+        self.sim1_radio.setChecked(True)
+        
+        # Set minimum widths to ensure text is visible
+        self.sim1_radio.setMinimumWidth(70)
+        self.sim2_radio.setMinimumWidth(70)
+        
         self.sim_group = QButtonGroup(self)
         self.sim_group.addButton(self.sim1_radio, 1)
         self.sim_group.addButton(self.sim2_radio, 2)
         self.sim_group.buttonClicked.connect(self.on_sim_selected)
-
+        
+        radio_layout.addWidget(self.sim1_radio)
+        radio_layout.addWidget(self.sim2_radio)
+        radio_layout.addStretch()
+        
+        # Auto failover checkbox
         self.auto_failover_cb = QCheckBox("Auto SIM failover")
         self.auto_failover_cb.toggled.connect(self.on_auto_failover_toggled)
-
-        group_layout.addWidget(self.sim1_radio)
-        group_layout.addWidget(self.sim2_radio)
+        
+        # Add everything to group
+        group_layout.addWidget(radio_widget)
         group_layout.addWidget(self.auto_failover_cb)
+        
         group.setLayout(group_layout)
-
         layout.addWidget(group)
         layout.addStretch()
+        
         self.setLayout(layout)
 
     def on_sim_selected(self, button):
