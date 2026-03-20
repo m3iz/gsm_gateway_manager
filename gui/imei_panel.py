@@ -26,7 +26,7 @@ class ImeiPanel(QWidget):
         form_layout.setSpacing(5)
         form_layout.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
         
-        # Current IMEI display - Unknown in RED
+        # Current IMEI display - Unknown in RED, Not connected also RED
         self.current_imei_label = QLabel(self.current_imei)
         self.current_imei_label.setStyleSheet("color: #ff5555; font-family: monospace; font-size: 10pt; font-weight: bold;")
         self.current_imei_label.setWordWrap(True)
@@ -102,10 +102,13 @@ class ImeiPanel(QWidget):
         """Read IMEI from modem using AT command."""
         if not self.modem.connected:
             self.current_imei_label.setText("Not connected")
-            self.current_imei_label.setStyleSheet("color: #888; font-family: monospace;")
+            self.current_imei_label.setStyleSheet("color: #ff5555; font-family: monospace; font-weight: bold;")  # RED error
+            self.status_label.setText("Cannot read: modem not connected")
+            self.status_label.setStyleSheet("color: #ff5555;")
             return
         
         self.status_label.setText("Reading IMEI...")
+        self.status_label.setStyleSheet("color: #888;")
         self.progress_bar.show()
         
         # Try different IMEI commands
@@ -126,8 +129,9 @@ class ImeiPanel(QWidget):
                 if line and len(line.strip()) == 15 and line.strip().isdigit():
                     self.current_imei = line.strip()
                     self.current_imei_label.setText(self.current_imei)
-                    self.current_imei_label.setStyleSheet("color: #4CAF50; font-family: monospace; font-weight: bold;")
-                    self.status_label.setText(f"IMEI read successfully")
+                    self.current_imei_label.setStyleSheet("color: #4CAF50; font-family: monospace; font-weight: bold;")  # Green success
+                    self.status_label.setText("IMEI read successfully")
+                    self.status_label.setStyleSheet("color: #4CAF50;")
                     self.progress_bar.hide()
                     self.imei_changed.emit(self.current_imei)
                     return
@@ -139,15 +143,17 @@ class ImeiPanel(QWidget):
                         if len(imei) == 15 and imei.isdigit():
                             self.current_imei = imei
                             self.current_imei_label.setText(self.current_imei)
-                            self.current_imei_label.setStyleSheet("color: #4CAF50; font-family: monospace; font-weight: bold;")
-                            self.status_label.setText(f"IMEI read successfully")
+                            self.current_imei_label.setStyleSheet("color: #4CAF50; font-family: monospace; font-weight: bold;")  # Green success
+                            self.status_label.setText("IMEI read successfully")
+                            self.status_label.setStyleSheet("color: #4CAF50;")
                             self.progress_bar.hide()
                             self.imei_changed.emit(self.current_imei)
                             return
         
         self.status_label.setText("Failed to read IMEI")
+        self.status_label.setStyleSheet("color: #ff5555;")  # Red error
         self.current_imei_label.setText("Read failed")
-        self.current_imei_label.setStyleSheet("color: #ff5555; font-family: monospace;")
+        self.current_imei_label.setStyleSheet("color: #ff5555; font-family: monospace; font-weight: bold;")  # Red error
         self.progress_bar.hide()
         self.logger.error("Could not read IMEI from modem")
     
@@ -211,6 +217,7 @@ class ImeiPanel(QWidget):
             return
         
         self.status_label.setText("Setting IMEI...")
+        self.status_label.setStyleSheet("color: #888;")
         self.progress_bar.show()
         
         # Try different commands to set IMEI
@@ -239,6 +246,7 @@ class ImeiPanel(QWidget):
         
         if success:
             self.status_label.setText("IMEI set successfully! Rebooting...")
+            self.status_label.setStyleSheet("color: #4CAF50;")
             self.logger.info(f"IMEI changed to: {new_imei}")
             
             # Some modems need reboot
@@ -254,6 +262,7 @@ class ImeiPanel(QWidget):
             QTimer.singleShot(3000, self.read_imei)
         else:
             self.status_label.setText("Failed to set IMEI")
+            self.status_label.setStyleSheet("color: #ff5555;")
             self.logger.error("Failed to set IMEI")
             QMessageBox.critical(self, "Error", "Failed to set IMEI. Command not supported?")
     
@@ -269,5 +278,6 @@ class ImeiPanel(QWidget):
             self.generate_btn.setEnabled(False)
             self.set_btn.setEnabled(False)
             self.current_imei_label.setText("Not connected")
-            self.current_imei_label.setStyleSheet("color: #888; font-family: monospace;")
+            self.current_imei_label.setStyleSheet("color: #ff5555; font-family: monospace; font-weight: bold;")  # RED error
             self.status_label.setText("Disconnected")
+            self.status_label.setStyleSheet("color: #ff5555;")
