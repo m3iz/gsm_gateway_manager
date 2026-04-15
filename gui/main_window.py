@@ -4,7 +4,7 @@ Main window with horizontal top toolbar and bottom console/logs.
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QSplitter, QStatusBar, QMenuBar,
                              QMenu, QMessageBox, QApplication, QScrollArea,
-                             QFrame)
+                             QFrame, QLabel)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 
@@ -19,6 +19,7 @@ from .scheduler_panel import SchedulerPanel
 from .statistics_panel import StatisticsPanel
 from .at_console import ATConsole
 from .log_widget import LogWidget
+from .logo import get_pixmap_from_base64, LOGO_BASE64
 
 class MainWindow(QMainWindow):
     def __init__(self):
@@ -80,11 +81,25 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(5)
         central.setLayout(main_layout)
 
-        # ========== TOP PANEL (Horizontal toolbar with all panels) ==========
+        # ========== TOP PANEL (Horizontal toolbar with logo and all panels) ==========
         top_panel = QWidget()
         top_layout = QHBoxLayout(top_panel)
         top_layout.setContentsMargins(0, 0, 0, 0)
         top_layout.setSpacing(5)
+        
+        # Add logo
+        logo_label = QLabel()
+        pixmap = get_pixmap_from_base64(LOGO_BASE64)
+        logo_label.setPixmap(pixmap.scaled(48, 48, 
+                                           Qt.AspectRatioMode.KeepAspectRatio, 
+                                           Qt.TransformationMode.SmoothTransformation))
+        top_layout.addWidget(logo_label)
+        
+        # Add separator line
+        separator = QFrame()
+        separator.setFrameShape(QFrame.Shape.VLine)
+        separator.setFrameShadow(QFrame.Shadow.Sunken)
+        top_layout.addWidget(separator)
         
         # Create all panels in horizontal layout
         self.conn_panel = ConnectionPanel(self.modem, self.logger)
@@ -145,7 +160,7 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self, "About GSM Modem Manager",
                           "GSM Modem Manager v1.0\n"
                           "Professional tool for GSM modem testing and automation.\n\n"
-                          "Layout: All controls in horizontal toolbar at the top,\n"
+                          "Layout: Logo + all controls in horizontal toolbar at the top,\n"
                           "statistics in the middle, console and logs at the bottom.\n\n"
                           "Features:\n"
                           "• AT command console\n"
