@@ -1,10 +1,9 @@
 """
-Main window with horizontal top toolbar and bottom console/logs.
+Main window organizing all panels.
 """
 from PyQt6.QtWidgets import (QMainWindow, QWidget, QVBoxLayout, QHBoxLayout,
                              QTabWidget, QSplitter, QStatusBar, QMenuBar,
-                             QMenu, QMessageBox, QApplication, QScrollArea,
-                             QFrame)
+                             QMenu, QMessageBox, QApplication, QScrollArea)
 from PyQt6.QtCore import Qt
 from PyQt6.QtGui import QAction
 
@@ -18,6 +17,7 @@ from .sms_panel import SmsPanel
 from .scheduler_panel import SchedulerPanel
 from .statistics_panel import StatisticsPanel
 from .at_console import ATConsole
+from .signal_graph import SignalGraph
 from .log_widget import LogWidget
 
 class MainWindow(QMainWindow):
@@ -75,67 +75,95 @@ class MainWindow(QMainWindow):
 
     def setup_central(self):
         central = QWidget()
-        main_layout = QVBoxLayout()
+        main_layout = QHBoxLayout()
         main_layout.setContentsMargins(5, 5, 5, 5)
-        main_layout.setSpacing(5)
         central.setLayout(main_layout)
 
-        # ========== TOP PANEL (Horizontal toolbar with all panels) ==========
-        top_panel = QWidget()
-        top_layout = QHBoxLayout(top_panel)
-        top_layout.setContentsMargins(0, 0, 0, 0)
-        top_layout.setSpacing(5)
+        # ========== LEFT PANEL ==========
+        left_scroll = QScrollArea()
+        left_scroll.setWidgetResizable(True)
+        left_scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAlwaysOff)
+        left_scroll.setStyleSheet("QScrollArea { border: none; }")
         
-        # Create all panels in horizontal layout
+        left_panel = QWidget()
+        left_layout = QVBoxLayout()
+        left_layout.setContentsMargins(0, 0, 0, 0)
+        left_layout.setSpacing(5)
+
+        # Top section: Connection, SIM, IMEI
         self.conn_panel = ConnectionPanel(self.modem, self.logger)
         self.sim_panel = SimControlPanel(self.modem, self.logger)
         self.imei_panel = ImeiPanel(self.modem, self.logger)
+        
+        left_layout.addWidget(self.conn_panel)
+        left_layout.addWidget(self.sim_panel)
+        left_layout.addWidget(self.imei_panel)
+        
+        # Middle section: Call and SMS in horizontal row
+        call_sms_widget = QWidget()
+        call_sms_layout = QHBoxLayout(call_sms_widget)
+        call_sms_layout.setContentsMargins(0, 0, 0, 0)
+        call_sms_layout.setSpacing(5)
+        
         self.call_panel = CallPanel(self.modem, self.logger)
         self.sms_panel = SmsPanel(self.modem, self.logger)
+        
+        call_sms_layout.addWidget(self.call_panel)
+        call_sms_layout.addWidget(self.sms_panel)
+        
+        left_layout.addWidget(call_sms_widget)
+        
+        # Bottom section: Scheduler
         self.scheduler_panel = SchedulerPanel(self.logger, self.call_panel, self.sms_panel)
+        left_layout.addWidget(self.scheduler_panel)
         
-        # Add all panels horizontally
-        top_layout.addWidget(self.conn_panel)
-        top_layout.addWidget(self.sim_panel)
-        top_layout.addWidget(self.imei_panel)
-        top_layout.addWidget(self.call_panel)
-        top_layout.addWidget(self.sms_panel)
-        top_layout.addWidget(self.scheduler_panel)
-        top_layout.addStretch()
+        left_layout.addStretch()
+        left_panel.setLayout(left_layout)
+        left_scroll.setWidget(left_panel)
+
+        # ========== RIGHT PANEL ==========
+        right_panel = QWidget()
+        right_layout = QVBoxLayout()
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(5)
         
-        # ========== BOTTOM SECTION (Statistics + Console/Logs) ==========
-        bottom_panel = QWidget()
-        bottom_layout = QVBoxLayout(bottom_panel)
+        # Top section: Tabs (Statistics and Signal Graph)
+        top_tabs = QTabWidget()
+        self.stat_panel = StatisticsPanel(self.logger)
+        self.signal_graph = SignalGraph(self.modem, self.logger)
+        
+        top_tabs.addTab(self.stat_panel, "📊 Statistics")
+        top_tabs.addTab(self.signal_graph, "📈 Signal Graph")
+        
+        # Bottom section: AT Console and Log Widget in horizontal row
+        bottom_widget = QWidget()
+        bottom_layout = QHBoxLayout(bottom_widget)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(5)
-        
-        # Statistics at the top of bottom section
-        self.stat_panel = StatisticsPanel(self.logger)
-        bottom_layout.addWidget(self.stat_panel)
-        
-        # Splitter for AT Console and Log Widget (horizontal)
-        console_splitter = QSplitter(Qt.Orientation.Horizontal)
         
         self.at_console = ATConsole(self.modem, self.logger)
         self.log_widget = LogWidget()
         
-        console_splitter.addWidget(self.at_console)
-        console_splitter.addWidget(self.log_widget)
-        console_splitter.setSizes([int(self.width() * 0.5), int(self.width() * 0.5)])
+        bottom_layout.addWidget(self.at_console)
+        bottom_layout.addWidget(self.log_widget)
         
-        bottom_layout.addWidget(console_splitter)
+        # Add sections to right layout
+        right_layout.addWidget(top_tabs)
+        right_layout.addWidget(bottom_widget)
         
-        # Set proportions: Statistics 30%, Console+Log 70%
-        bottom_layout.setStretchFactor(self.stat_panel, 3)
-        bottom_layout.setStretchFactor(console_splitter, 7)
+        # Set proportions: top 40%, bottom 60%
+        right_layout.setStretchFactor(top_tabs, 4)
+        right_layout.setStretchFactor(bottom_widget, 6)
         
-        # ========== MAIN SPLITTER (Top/Bottom) ==========
-        main_splitter = QSplitter(Qt.Orientation.Vertical)
-        main_splitter.addWidget(top_panel)
-        main_splitter.addWidget(bottom_panel)
-        main_splitter.setSizes([int(self.height() * 0.45), int(self.height() * 0.55)])
-        
-        main_layout.addWidget(main_splitter)
+        right_panel.setLayout(right_layout)
+
+        # Main splitter between left and right
+        splitter = QSplitter(Qt.Orientation.Horizontal)
+        splitter.addWidget(left_scroll)
+        splitter.addWidget(right_panel)
+        splitter.setSizes([int(self.width() * 0.35), int(self.width() * 0.65)])
+
+        main_layout.addWidget(splitter)
         self.setCentralWidget(central)
 
     def setup_statusbar(self):
@@ -145,13 +173,12 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self, "About GSM Modem Manager",
                           "GSM Modem Manager v1.0\n"
                           "Professional tool for GSM modem testing and automation.\n\n"
-                          "Layout: All controls in horizontal toolbar at the top,\n"
-                          "statistics in the middle, console and logs at the bottom.\n\n"
                           "Features:\n"
                           "• AT command console\n"
                           "• Call automation\n"
                           "• SMS campaigns\n"
                           "• Network monitoring\n"
+                          "• Signal graphing\n"
                           "• Task scheduling\n"
                           "• IMEI management\n\n"
                           "Developed with PyQt6 and pyserial")
