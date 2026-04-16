@@ -32,7 +32,7 @@ class StatisticsPanel(QWidget):
         row = 0
         for key, display_name in [
             ('dial_attempts', 'Dial Attempts:'),
-            ('successful_calls', 'Successful Calls:'),
+            ('successful_calls', 'Answered Calls:'),
             ('rejected_calls', 'Rejected Calls:'),
             ('network_errors', 'Network Errors:'),
             ('sms_sent', 'SMS Sent:')

@@ -35,12 +35,10 @@ class ConnectionPanel(QWidget):
         self.modem = modem
         self.logger = logger
         self.init_ui()
-        # Таймер только для обновления сигнала и оператора (не для SIM)
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.update_network_display)
-        self.refresh_timer.start(5000)  # раз в 5 секунд
+        self.refresh_timer.start(5000)
         self.refresh_ports()
-        # Подписываемся на URC для мгновенного обновления статуса SIM
         self.modem.register_urc_callback(self.on_urc)
 
     def on_urc(self, line):
@@ -50,7 +48,6 @@ class ConnectionPanel(QWidget):
         elif "SIM not inserted" in line:
             self.update_sim_ui("SIM NOT INSERTED")
         elif "+CPIN:" in line:
-            # Принудительно перепроверим статус
             QTimer.singleShot(500, self.check_sim_and_pin)
 
     def init_ui(self):
@@ -93,12 +90,17 @@ class ConnectionPanel(QWidget):
         status_layout.setSpacing(2)
         self.conn_status = QLabel("Disconnected")
         self.conn_status.setStyleSheet("color: #ff5555; font-weight: bold;")
+        
+        # RSSI label and progress bar with percentage
         self.signal_bar = QProgressBar()
         self.signal_bar.setRange(0, 100)
         self.signal_bar.setValue(0)
         self.signal_bar.setTextVisible(False)
         self.signal_bar.setFixedHeight(8)
+        self.signal_percent_label = QLabel("0%")
+        
         self.operator_label = QLabel("Unknown")
+        self.operator_code_label = QLabel("Unknown")  # MCC+MNC
         self.cell_id_label = QLabel("Unknown")
         self.sim_status_label = QLabel("Unknown")
         self.error_label = QLabel("")
@@ -109,22 +111,25 @@ class ConnectionPanel(QWidget):
         row = 0
         status_layout.addWidget(QLabel("Status:"), row, 0)
         status_layout.addWidget(self.conn_status, row, 1); row += 1
-        status_layout.addWidget(QLabel("Signal:"), row, 0)
-        status_layout.addWidget(self.signal_bar, row, 1); row += 1
+        status_layout.addWidget(QLabel("RSSI:"), row, 0)
+        status_layout.addWidget(self.signal_bar, row, 1)
+        status_layout.addWidget(self.signal_percent_label, row, 2); row += 1
         status_layout.addWidget(QLabel("Operator:"), row, 0)
-        status_layout.addWidget(self.operator_label, row, 1); row += 1
+        status_layout.addWidget(self.operator_label, row, 1, 1, 2); row += 1
+        status_layout.addWidget(QLabel("Operator Code:"), row, 0)
+        status_layout.addWidget(self.operator_code_label, row, 1, 1, 2); row += 1
         status_layout.addWidget(QLabel("Cell ID:"), row, 0)
-        status_layout.addWidget(self.cell_id_label, row, 1); row += 1
+        status_layout.addWidget(self.cell_id_label, row, 1, 1, 2); row += 1
         status_layout.addWidget(QLabel("SIM:"), row, 0)
-        status_layout.addWidget(self.sim_status_label, row, 1); row += 1
+        status_layout.addWidget(self.sim_status_label, row, 1, 1, 2); row += 1
 
         self.pin_btn = QPushButton("Enter PIN")
         self.pin_btn.clicked.connect(self.manual_pin_entry)
         self.pin_btn.setVisible(False)
         status_layout.addWidget(QLabel(""), row, 0)
-        status_layout.addWidget(self.pin_btn, row, 1); row += 1
+        status_layout.addWidget(self.pin_btn, row, 1, 1, 2); row += 1
 
-        status_layout.addWidget(self.error_label, row, 0, 1, 2)
+        status_layout.addWidget(self.error_label, row, 0, 1, 3)
         status_group.setLayout(status_layout)
         layout.addWidget(status_group)
 
@@ -193,7 +198,7 @@ class ConnectionPanel(QWidget):
             self.error_label.hide()
             self.connection_changed.emit(True)
             self.logger.info(f"Connected to {port}")
-            self.check_sim_and_pin()  # однократная проверка после подключения
+            self.check_sim_and_pin()
             self.update_network_display()
         else:
             self.connect_btn.setText("Connect")
@@ -206,7 +211,6 @@ class ConnectionPanel(QWidget):
         self.connect_btn.setEnabled(True)
 
     def check_sim_and_pin(self):
-        """Однократная проверка статуса SIM (по запросу)."""
         status = self.modem.check_sim_status()
         self.logger.info(f"SIM status: {status}")
         self.update_sim_ui(status)
@@ -255,12 +259,21 @@ class ConnectionPanel(QWidget):
                 QMessageBox.warning(self, "No PIN", "Please enter a PIN code.")
 
     def update_network_display(self):
-        """Обновление сигнала, оператора, Cell ID (без опроса SIM)."""
         if not self.modem.connected:
             return
         self.modem.update_network_info()
-        self.signal_bar.setValue(self.modem.get_signal_percent())
+        percent = self.modem.get_signal_percent()
+        self.signal_bar.setValue(percent)
+        self.signal_percent_label.setText(f"{percent}%")
+        # Operator name
         self.operator_label.setText(self.modem.operator[:20])
+        # Operator code (MCC+MNC) from network_info
+        mcc = self.modem.network_info.get('mcc', '')
+        mnc = self.modem.network_info.get('mnc', '')
+        if mcc and mnc:
+            self.operator_code_label.setText(f"{mcc}{mnc}")
+        else:
+            self.operator_code_label.setText("Unknown")
         ci = self.modem.network_info.get('ci', 'Unknown')
         self.cell_id_label.setText(str(ci)[:10])
 

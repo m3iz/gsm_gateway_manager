@@ -11,10 +11,11 @@ from utils.phonebook import Phonebook
 from gui.phonebook_dialog import PhonebookDialog
 
 class SmsPanel(QWidget):
-    def __init__(self, modem, logger):
+    def __init__(self, modem, logger, stat_panel):
         super().__init__()
         self.modem = modem
         self.logger = logger
+        self.stat_panel = stat_panel
         self.phonebook = Phonebook()
         self.templates = {
             "Welcome": "Welcome to our service!",
@@ -38,19 +39,15 @@ class SmsPanel(QWidget):
         # SIM selector - horizontal
         sim_layout = QHBoxLayout()
         sim_layout.setSpacing(20)
-        
         self.sim1_radio = QRadioButton("SIM 1")
         self.sim2_radio = QRadioButton("SIM 2")
         self.sim1_radio.setChecked(True)
-        
         self.sim_group = QButtonGroup(self)
         self.sim_group.addButton(self.sim1_radio, 1)
         self.sim_group.addButton(self.sim2_radio, 2)
-        
-        sim_layout.addWidget(self.sim1_radio)
-        sim_layout.addWidget(self.sim2_radio)
+        sim_layout.addWidget(self.sim1_radio); self.sim1_radio.setMinimumWidth(70)
+        sim_layout.addWidget(self.sim2_radio); self.sim2_radio.setMinimumWidth(70)
         sim_layout.addStretch()
-        
         form.addRow("SIM:", sim_layout)
 
         # Phone number with phonebook
@@ -58,12 +55,10 @@ class SmsPanel(QWidget):
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("Phone number")
         number_layout.addWidget(self.phone_input)
-        
         self.phonebook_btn = QPushButton("📖")
         self.phonebook_btn.setFixedWidth(35)
         self.phonebook_btn.clicked.connect(self.open_phonebook)
         number_layout.addWidget(self.phonebook_btn)
-        
         form.addRow("Number:", number_layout)
 
         # Quick contacts
@@ -96,19 +91,15 @@ class SmsPanel(QWidget):
         self.quantity_spin.setRange(1, 100)
         self.quantity_spin.setValue(1)
         self.quantity_spin.setFixedWidth(70)
-        
         self.char_count = QLabel("0/160")
         self.char_count.setStyleSheet("color: #888;")
-        
         self.send_btn = QPushButton("📨 Send")
         self.send_btn.clicked.connect(self.send_sms)
-        
         bottom_layout.addWidget(QLabel("x"))
         bottom_layout.addWidget(self.quantity_spin)
         bottom_layout.addWidget(self.char_count)
         bottom_layout.addStretch()
         bottom_layout.addWidget(self.send_btn)
-        
         form.addRow("", bottom_layout)
 
         sms_group.setLayout(form)
@@ -168,7 +159,6 @@ class SmsPanel(QWidget):
             return
 
         quantity = self.quantity_spin.value()
-        
         if quantity > 1:
             reply = QMessageBox.question(self, "Confirm", f"Send {quantity} SMS?",
                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
@@ -179,6 +169,7 @@ class SmsPanel(QWidget):
             success = self.modem.send_sms(number, message)
             if success:
                 self.logger.info(f"SMS {i+1}/{quantity} sent")
+                self.stat_panel.increment('sms_sent')
             else:
                 self.logger.error(f"SMS {i+1}/{quantity} failed")
                 QMessageBox.critical(self, "Error", f"SMS {i+1} failed!")
