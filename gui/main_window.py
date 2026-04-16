@@ -24,7 +24,7 @@ from .logo import get_pixmap_from_base64, LOGO_BASE64
 class MainWindow(QMainWindow):
     def __init__(self):
         super().__init__()
-        self.setWindowTitle("GSM Modem Manager")
+        self.setWindowTitle("NX-ICE Manager")
         
         screen = QApplication.primaryScreen().availableGeometry()
         self.resize(int(screen.width() * 0.85), int(screen.height() * 0.85))
