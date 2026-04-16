@@ -23,10 +23,12 @@ class StatisticsPanel(QWidget):
 
     def init_ui(self):
         layout = QVBoxLayout()
-        layout.setContentsMargins(10, 10, 10, 10)
+        layout.setContentsMargins(5, 5, 5, 5)
+        layout.setSpacing(2)
 
         group = QGroupBox("Statistics")
         grid = QGridLayout()
+        grid.setSpacing(2)
 
         self.labels = {}
         row = 0
@@ -45,12 +47,12 @@ class StatisticsPanel(QWidget):
         group.setLayout(grid)
         layout.addWidget(group)
 
-        # Reset button
         self.reset_btn = QPushButton("Reset Statistics")
         self.reset_btn.clicked.connect(self.reset_stats)
         layout.addWidget(self.reset_btn)
 
-        layout.addStretch()
+        # Set a reasonable maximum width to keep it compact but not too narrow
+        self.setMaximumWidth(350)
         self.setLayout(layout)
 
     def update_display(self):

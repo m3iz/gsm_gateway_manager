@@ -101,10 +101,15 @@ class MainWindow(QMainWindow):
         main_layout.setSpacing(5)
         central.setLayout(main_layout)
 
-        # Create statistics panel FIRST (will be placed on left side)
-        self.stat_panel = StatisticsPanel(self.logger)
+        # ========== TOP PANEL (Horizontal toolbar) ==========
+        top_panel = QWidget()
+        top_panel.setStyleSheet("QWidget { background-color: #2d2d2d; border-radius: 5px; }")
+        top_layout = QHBoxLayout(top_panel)
+        top_layout.setContentsMargins(10, 10, 10, 10)
+        top_layout.setSpacing(10)
         
-        # Create other panels
+        # Create panels
+        self.stat_panel = StatisticsPanel(self.logger)
         self.conn_panel = ConnectionPanel(self.modem, self.logger)
         self.sim_panel = SimControlPanel(self.modem, self.logger)
         self.imei_panel = ImeiPanel(self.modem, self.logger)
@@ -112,46 +117,38 @@ class MainWindow(QMainWindow):
         self.sms_panel = SmsPanel(self.modem, self.logger, self.stat_panel)
         self.scheduler_panel = SchedulerPanel(self.logger, self.call_panel, self.sms_panel)
         
-        # Connect signal for IMEI auto-read
-        self.conn_panel.connection_changed.connect(self.on_connection_changed)
+        # Add to top layout with stretch
+        top_layout.addWidget(self.conn_panel, 1)
+        top_layout.addWidget(self.sim_panel, 1)
+        top_layout.addWidget(self.imei_panel, 1)
+        top_layout.addWidget(self.call_panel, 1)
+        top_layout.addWidget(self.sms_panel, 1)
+        top_layout.addWidget(self.scheduler_panel, 1)
         
-        # TOP PANEL - Horizontal bar
-        top_panel = QWidget()
-        top_panel.setStyleSheet("QWidget { background-color: #2d2d2d; border-radius: 5px; }")
-        top_layout = QHBoxLayout(top_panel)
-        top_layout.setContentsMargins(10, 10, 10, 10)
-        top_layout.setSpacing(5)
-        
-        top_layout.addWidget(self.conn_panel)
-        top_layout.addWidget(self.sim_panel)
-        top_layout.addWidget(self.imei_panel)
-        top_layout.addWidget(self.call_panel)
-        top_layout.addWidget(self.sms_panel)
-        top_layout.addWidget(self.scheduler_panel)
-        top_layout.addStretch()
-        
-        # BOTTOM PANEL - Splitter for Statistics + Console/Log
+        # ========== BOTTOM SECTION ==========
         bottom_panel = QWidget()
-        bottom_layout = QVBoxLayout(bottom_panel)
+        bottom_layout = QHBoxLayout(bottom_panel)
         bottom_layout.setContentsMargins(0, 0, 0, 0)
         bottom_layout.setSpacing(5)
         
-        # Statistics (compact) at the top of bottom section
-        bottom_layout.addWidget(self.stat_panel)
+        # Statistics on the left (compact)
+        bottom_layout.addWidget(self.stat_panel, 1)
         
-        # Splitter for AT Console and Log Widget (horizontal)
+        # Console and Log on the right in a splitter
+        right_widget = QWidget()
+        right_layout = QVBoxLayout(right_widget)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+        right_layout.setSpacing(0)
         console_splitter = QSplitter(Qt.Orientation.Horizontal)
         self.at_console = ATConsole(self.modem, self.logger)
         self.log_widget = LogWidget()
         console_splitter.addWidget(self.at_console)
         console_splitter.addWidget(self.log_widget)
-        console_splitter.setSizes([int(self.width() * 0.5), int(self.width() * 0.5)])
-        bottom_layout.addWidget(console_splitter)
+        console_splitter.setSizes([int(self.width() * 0.4), int(self.width() * 0.6)])
+        right_layout.addWidget(console_splitter)
+        bottom_layout.addWidget(right_widget, 2)
         
-        bottom_layout.setStretchFactor(self.stat_panel, 2)
-        bottom_layout.setStretchFactor(console_splitter, 6)
-        
-        # Main vertical splitter between top and bottom
+        # ========== MAIN VERTICAL SPLITTER ==========
         main_splitter = QSplitter(Qt.Orientation.Vertical)
         main_splitter.addWidget(top_panel)
         main_splitter.addWidget(bottom_panel)
@@ -159,6 +156,9 @@ class MainWindow(QMainWindow):
         
         main_layout.addWidget(main_splitter)
         self.setCentralWidget(central)
+        
+        # Connect signal for IMEI auto-read
+        self.conn_panel.connection_changed.connect(self.on_connection_changed)
 
     def setup_statusbar(self):
         self.statusBar().showMessage("Ready")

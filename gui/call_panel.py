@@ -48,10 +48,12 @@ class CallPanel(QWidget):
         ]
         self.country_combo.addItems(countries)
         self.country_combo.setMinimumWidth(150)
-        self.country_combo.setEditable(True)  # Allow custom input
+        self.country_combo.setMaxVisibleItems(10)   # Scrollable list with 10 items visible
+        self.country_combo.setEditable(True)
         
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("Phone number")
+        self.phone_input.setMinimumWidth(200)       # Wider input field
         number_layout.addWidget(self.country_combo)
         number_layout.addWidget(self.phone_input)
         auto_layout.addRow("Number:", number_layout)
