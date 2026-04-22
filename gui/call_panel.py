@@ -32,19 +32,22 @@ class CallPanel(QWidget):
         self.country_combo = QComboBox()
         # Extended country list with codes
         countries = [
-            "🇷🇺 Russia +7", "🇺🇸 USA +1", "🇺🇦 Ukraine +380", "🇩🇪 Germany +49",
-            "🇬🇧 UK +44", "🇫🇷 France +33", "🇮🇹 Italy +39", "🇪🇸 Spain +34",
-            "🇨🇦 Canada +1", "🇦🇺 Australia +61", "🇨🇳 China +86", "🇯🇵 Japan +81",
-            "🇰🇷 South Korea +82", "🇮🇳 India +91", "🇧🇷 Brazil +55", "🇲🇽 Mexico +52",
-            "🇿🇦 South Africa +27", "🇦🇪 UAE +971", "🇸🇦 Saudi Arabia +966", "🇹🇷 Turkey +90",
-            "🇵🇱 Poland +48", "🇳🇱 Netherlands +31", "🇸🇪 Sweden +46", "🇳🇴 Norway +47",
-            "🇩🇰 Denmark +45", "🇫🇮 Finland +358", "🇨🇿 Czech +420", "🇭🇺 Hungary +36",
-            "🇷🇴 Romania +40", "🇧🇬 Bulgaria +359", "🇬🇷 Greece +30", "🇵🇹 Portugal +351",
-            "🇧🇪 Belgium +32", "🇨🇭 Switzerland +41", "🇦🇹 Austria +43", "🇮🇪 Ireland +353",
-            "🇮🇱 Israel +972", "🇪🇬 Egypt +20", "🇳🇬 Nigeria +234", "🇰🇪 Kenya +254",
-            "🇦🇷 Argentina +54", "🇨🇱 Chile +56", "🇵🇪 Peru +51", "🇻🇪 Venezuela +58",
-            "🇲🇾 Malaysia +60", "🇸🇬 Singapore +65", "🇵🇭 Philippines +63", "🇻🇳 Vietnam +84",
-            "🇹🇭 Thailand +66", "🇮🇩 Indonesia +62", "🇵🇰 Pakistan +92", "🇧🇩 Bangladesh +880"
+            "(RU) Russia +7", "(US) USA +1", "(UA) Ukraine +380", "(DE) Germany +49",
+            "(GB) UK +44", "(FR) France +33", "(IT) Italy +39", "(ES) Spain +34",
+            "(CA) Canada +1", "(AU) Australia +61", "(CN) China +86", "(JP) Japan +81",
+            "(KR) South Korea +82", "(IN) India +91", "(BR) Brazil +55", "(MX) Mexico +52",
+            "(ZA) South Africa +27", "(AE) UAE +971", "(SA) Saudi Arabia +966", "(TR) Turkey +90",
+            "(PL) Poland +48", "(NL) Netherlands +31", "(SE) Sweden +46", "(NO) Norway +47",
+            "(DK) Denmark +45", "(FI) Finland +358", "(CZ) Czech +420", "(HU) Hungary +36",
+            "(RO) Romania +40", "(BG) Bulgaria +359", "(GR) Greece +30", "(PT) Portugal +351",
+            "(BE) Belgium +32", "(CH) Switzerland +41", "(AT) Austria +43", "(IE) Ireland +353",
+            "(IL) Israel +972", "(EG) Egypt +20", "(NG) Nigeria +234", "(KE) Kenya +254",
+            "(AR) Argentina +54", "(CL) Chile +56", "(PE) Peru +51", "(VE) Venezuela +58",
+            "(MY) Malaysia +60", "(SG) Singapore +65", "(PH) Philippines +63", "(VN) Vietnam +84",
+            "(TH) Thailand +66", "(ID) Indonesia +62", "(PK) Pakistan +92", "(BD) Bangladesh +880",
+            # New countries
+            "(LV) Latvia +371", "(LT) Lithuania +370", "(EE) Estonia +372", "(BY) Belarus +375",
+            "(KZ) Kazakhstan +7", "(GE) Georgia +995", "(AM) Armenia +374"
         ]
         self.country_combo.addItems(countries)
         self.country_combo.setMinimumWidth(150)

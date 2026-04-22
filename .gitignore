@@ -6,3 +6,5 @@ gui/__pycache__/
 build/
 
 dist/
+
+gsm/__pycache__/

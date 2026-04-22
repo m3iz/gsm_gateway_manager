@@ -45,6 +45,10 @@ class ConnectionPanel(QWidget):
         if line.startswith("SIM_STATUS:"):
             status = line.split(":", 1)[1].strip()
             self.update_sim_ui(status)
+        elif line.startswith("OPERATOR:"):
+            operator = line.split(":", 1)[1].strip()
+            self.operator_label.setText(operator)
+            self.logger.info(f"Operator updated via URC: {operator}")
         elif "SIM not inserted" in line:
             self.update_sim_ui("SIM NOT INSERTED")
         elif "+CPIN:" in line:

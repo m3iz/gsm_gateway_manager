@@ -47,11 +47,23 @@ class GsmModem:
         self.connected = False
 
     def _handle_urc(self, line: str):
+        """Handle unsolicited result codes."""
         if '+CPIN:' in line.upper():
             self.check_sim_status()
         elif '+CME ERROR: SIM not inserted' in line:
             self.sim_status = "SIM NOT INSERTED"
             self._notify_status()
+        elif '*COPN:' in line:
+            # Example: *COPN:0,"MTS RUS"
+            try:
+                parts = line.split(',')
+                if len(parts) >= 2:
+                    op_name = parts[1].strip('"')
+                    if op_name:
+                        self.operator = op_name
+                        self._notify_operator()
+            except:
+                pass
         for cb in self.rx_callbacks:
             try:
                 cb(line)
@@ -62,6 +74,13 @@ class GsmModem:
         for cb in self.rx_callbacks:
             try:
                 cb(f"SIM_STATUS: {self.sim_status}")
+            except:
+                pass
+
+    def _notify_operator(self):
+        for cb in self.rx_callbacks:
+            try:
+                cb(f"OPERATOR: {self.operator}")
             except:
                 pass
 
@@ -118,14 +137,10 @@ class GsmModem:
                 break
         # Operator name and code
         resp = self.serial.send_command(at.AT_COPS)
-        op_info = at.parse_cops(resp)
-        self.operator = op_info.get('operator', 'Unknown')
-        # Try to get MCC+MNC from +COPS response
         for line in resp:
             if '+COPS:' in line:
                 parts = line.split(':')[1].strip().split(',')
                 if len(parts) >= 4:
-                    # format 2 (numeric) gives MCC+MNC
                     if parts[1].strip() == '2' and len(parts) >= 3:
                         code = parts[2].strip('"')
                         if len(code) >= 5:
