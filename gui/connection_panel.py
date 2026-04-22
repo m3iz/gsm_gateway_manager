@@ -42,6 +42,12 @@ class ConnectionPanel(QWidget):
         self.modem.register_urc_callback(self.on_urc)
 
     def on_urc(self, line):
+        if line.startswith("NETWORK_INFO:"):
+            import re
+            match = re.search(r"LAC=(d+), CI=(d+)", line)
+            if match:
+                self.lac_label.setText(match.group(1))
+                self.cell_id_label.setText(match.group(2))
         if line.startswith("SIM_STATUS:"):
             status = line.split(":", 1)[1].strip()
             self.update_sim_ui(status)

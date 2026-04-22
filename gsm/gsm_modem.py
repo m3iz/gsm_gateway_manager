@@ -34,6 +34,8 @@ class GsmModem:
                 self.connected = True
                 self.serial.send_command(at.ATE0, timeout=2)
                 self.serial.set_rx_callback(self._handle_urc)
+                # Включить расширенный режим отчёта о регистрации
+                self.serial.send_command("AT+CREG=2", timeout=2)
                 self.check_sim_status()
                 self.update_network_info()
                 return True
@@ -54,7 +56,6 @@ class GsmModem:
             self.sim_status = "SIM NOT INSERTED"
             self._notify_status()
         elif '*COPN:' in line:
-            # Example: *COPN:0,"MTS RUS"
             try:
                 parts = line.split(',')
                 if len(parts) >= 2:
@@ -64,11 +65,47 @@ class GsmModem:
                         self._notify_operator()
             except:
                 pass
+        elif '+CREG:' in line:
+            # Parse +CREG: <stat>[,<lac>,<ci>]
+            self._parse_creg(line)
         for cb in self.rx_callbacks:
             try:
                 cb(line)
             except:
                 pass
+
+    def _parse_creg(self, line: str):
+        """Parse +CREG response to extract LAC and Cell ID."""
+        try:
+            # Format: +CREG: 2,1,"456E","0007261F" or +CREG: 1,"456E","0007260B"
+            parts = line.split(':')[1].strip().split(',')
+            if len(parts) >= 3:
+                # Mode is first param (2), then stat, then lac, then ci
+                # Different modems have different formats
+                if len(parts) >= 4:
+                    lac_hex = parts[2].strip('"')
+                    ci_hex = parts[3].strip('"')
+                elif len(parts) >= 3:
+                    # Sometimes format: +CREG: 1,"456E","0007260B"
+                    lac_hex = parts[1].strip('"')
+                    ci_hex = parts[2].strip('"')
+                else:
+                    return
+                # Convert hex to decimal
+                if lac_hex:
+                    self.network_info['lac'] = str(int(lac_hex, 16))
+                if ci_hex:
+                    self.network_info['ci'] = str(int(ci_hex, 16))
+                self._notify_network_info()
+        except Exception as e:
+            print(f"Error parsing CREG: {e}")
+
+    def _notify_network_info(self):
+        """Notify UI about network info update."""
+        for cb in self.rx_callbacks:
+            lac = self.network_info.get('lac', 'Unknown')
+            ci = self.network_info.get('ci', 'Unknown')
+            cb(f"NETWORK_INFO: LAC={lac}, CI={ci}")
 
     def _notify_status(self):
         for cb in self.rx_callbacks:
@@ -146,14 +183,11 @@ class GsmModem:
                         if len(code) >= 5:
                             self.network_info['mcc'] = code[:3]
                             self.network_info['mnc'] = code[3:]
-        # Registration info for LAC and CI
-        resp = self.serial.send_command(at.AT_CREG)
+        # Query CREG to get LAC and CI
+        resp = self.serial.send_command("AT+CREG?", timeout=3)
         for line in resp:
             if '+CREG:' in line:
-                parts = line.split(':')[1].strip().split(',')
-                if len(parts) >= 5:
-                    self.network_info['lac'] = parts[3].strip('"')
-                    self.network_info['ci'] = parts[4].strip('"')
+                self._parse_creg(line)
 
     def select_sim(self, sim: int) -> bool:
         if sim not in (1, 2):
