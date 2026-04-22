@@ -105,8 +105,8 @@ class MainWindow(QMainWindow):
         top_panel = QWidget()
         top_panel.setStyleSheet("QWidget { background-color: #2d2d2d; border-radius: 5px; }")
         top_layout = QHBoxLayout(top_panel)
-        top_layout.setContentsMargins(10, 10, 10, 10)
-        top_layout.setSpacing(10)
+        top_layout.setContentsMargins(5, 5, 5, 5)
+        top_layout.setSpacing(5)
         
         # Create panels
         self.stat_panel = StatisticsPanel(self.logger)
@@ -168,3 +168,8 @@ class MainWindow(QMainWindow):
         QMessageBox.about(self, "About GSM Modem Manager",
                           "GSM Modem Manager v1.0\nProfessional tool for GSM modem testing and automation.\n\n"
                           "Developed with PyQt6 and pyserial")
+        # Оборачиваем top_panel в scroll area, если контент не влазит
+        self.scroll_area = QScrollArea()
+        self.scroll_area.setWidgetResizable(True)
+        self.scroll_area.setWidget(top_panel)
+        self.scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarPolicy.ScrollBarAsNeeded)
