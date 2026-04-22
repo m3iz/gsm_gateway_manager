@@ -1,2 +1,8 @@
 /venv/
 gui/__pycache__/
+
+*.pyc
+
+build/
+
+dist/
