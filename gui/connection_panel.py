@@ -161,16 +161,29 @@ class ConnectionPanel(QWidget):
 
     def refresh_ports(self):
         self.port_combo.clear()
-        ports = self.modem.serial.get_available_ports()
-        if ports:
-            for port in ports:
-                if isinstance(port, dict):
-                    display = f"{port['device']} - {port.get('description', '')}" if port.get('description') else port['device']
-                else:
-                    display = port
-                self.port_combo.addItem(display, port if isinstance(port, dict) else port)
+        all_ports = self.modem.serial.get_available_ports()
+        
+        # Фильтруем только те порты, которые относятся к NX-ICE
+        filtered_ports = []
+        for port_name in all_ports:
+            info = self.modem.serial.get_device_info(port_name)
+            if info:
+                manufacturer = (info.get('manufacturer') or "").lower()
+                product = (info.get('product') or "").lower()
+                description = (info.get('description') or "").lower()
+                if "nx-ice" in manufacturer or "nx-ice" in product or "nx-ice" in description:
+                    filtered_ports.append(port_name)
+            else:
+                # Если нет информации, всё равно покажем порт (на всякий случай)
+                filtered_ports.append(port_name)
+        
+        if filtered_ports:
+            for port in filtered_ports:
+                self.port_combo.addItem(port, port)
+            if self.port_combo.count() > 0:
+                self.port_combo.setCurrentIndex(0)
         else:
-            self.port_combo.addItem("No ports found")
+            self.port_combo.addItem("No NX-ICE devices found")
 
     def toggle_connection(self):
         if self.modem.connected:
