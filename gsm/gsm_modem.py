@@ -238,3 +238,78 @@ class GsmModem:
         if rssi == 99 or rssi < 0:
             return 0
         return min(100, int((rssi / 31) * 100))
+
+    def wait_for_call_progress(self, timeout=30):
+        """Ожидает сигнал, что вызов начался (alerting/ringing). Возвращает True, если дождался."""
+        if not self.connected:
+            return False
+        start = time.time()
+        buffer = []
+        while time.time() - start < timeout:
+            # Читаем все накопившиеся URC
+            # В синхронной версии serial_manager.py нет асинхронного чтения, 
+            # поэтому проще реализовать в самом классе через send_command с ожиданием?
+            # Но send_command читает только до OK/ERROR, не ловит URC.
+            # Альтернатива: читать из порта напрямую, не блокируя.
+            # Упростим: опрашиваем порт каждые 0.2 секунды.
+            # Для этого нужно, чтобы serial_manager давал доступ к порту.
+            try:
+                if self.serial.port and self.serial.port.in_waiting:
+                    line = self.serial.port.readline().decode('utf-8', errors='ignore').strip()
+                    if line:
+                        if '+CLCC:' in line and ',3,' in line:  # alerting state
+                            return True
+                        if 'VOICE CALL: BEGIN' in line:
+                            return True
+                        if '+COLP' in line:  # Connected line (answered, not alerting)
+                            # Но мы хотим именно alerting, а не ответ
+                            # Но для агрессивного достаточно, что вызов дошёл.
+                            return True
+            except:
+                pass
+            time.sleep(0.2)
+        return False
+
+    def wait_for_ring(self, timeout=15):
+        """Ждёт появления гудков (alerting) до timeout секунд. Возвращает True, если дождался."""
+        if not self.serial.port or not self.serial.port.is_open:
+            return False
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                if self.serial.port.in_waiting:
+                    data = self.serial.port.readline().decode('utf-8', errors='ignore').strip()
+                    if data:
+                        # Сохраняем в лог? Можем выводить через callback, но для простоты не будем
+                        if '+CLCC:' in data and ',3,' in data:
+                            return True
+                        if 'VOICE CALL: BEGIN' in data:
+                            return True
+                        if '+COLP' in data:
+                            return True
+            except:
+                pass
+            time.sleep(0.2)
+        return False
+
+    def wait_for_ring(self, timeout=15):
+        """Ждёт появления гудков (alerting) до timeout секунд. Возвращает True, если дождался."""
+        if not self.serial.port or not self.serial.port.is_open:
+            return False
+        start = time.time()
+        while time.time() - start < timeout:
+            try:
+                if self.serial.port.in_waiting:
+                    data = self.serial.port.readline().decode('utf-8', errors='ignore').strip()
+                    if data:
+                        # Сохраняем в лог? Можем выводить через callback, но для простоты не будем
+                        if '+CLCC:' in data and ',3,' in data:
+                            return True
+                        if 'VOICE CALL: BEGIN' in data:
+                            return True
+                        if '+COLP' in data:
+                            return True
+            except:
+                pass
+            time.sleep(0.2)
+        return False
