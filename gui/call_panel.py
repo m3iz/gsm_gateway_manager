@@ -3,8 +3,9 @@ Call automation panel with dialing controls.
 """
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                              QComboBox, QLineEdit, QSpinBox, QPushButton,
-                             QLabel, QFormLayout)
+                             QLabel, QFormLayout, QCheckBox)
 from PyQt6.QtCore import Qt, QTimer
+import re
 
 class CallPanel(QWidget):
     def __init__(self, modem, logger, stat_panel):
@@ -15,6 +16,7 @@ class CallPanel(QWidget):
         self.calling_active = False
         self.call_timer = QTimer()
         self.call_timer.timeout.connect(self.place_call)
+        self.aggressive = False
         self.init_ui()
 
     def init_ui(self):
@@ -51,7 +53,7 @@ class CallPanel(QWidget):
         self.country_combo.setMinimumWidth(150)
         self.country_combo.setMaxVisibleItems(10)
         self.country_combo.setEditable(True)
-        
+
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("Phone number")
         self.phone_input.setMinimumWidth(200)
@@ -69,21 +71,21 @@ class CallPanel(QWidget):
         self.delay_unit.setFixedWidth(70)
         delay_layout.addWidget(self.delay_spin)
         delay_layout.addWidget(self.delay_unit)
+        self.start_btn = QPushButton("Start")
+        self.stop_btn = QPushButton("Stop")
         delay_layout.addStretch()
         auto_layout.addRow("Delay:", delay_layout)
 
+        # Aggressive dialing checkbox
+
         btn_layout = QHBoxLayout()
-        self.start_btn = QPushButton("Start")
-        self.start_btn.setMinimumWidth(100)
-        self.start_btn.setStyleSheet("QPushButton { text-align: center; white-space: nowrap; }")
-        self.stop_btn = QPushButton("Stop")
-        self.stop_btn.setMinimumWidth(100)
-        self.stop_btn.setStyleSheet("QPushButton { text-align: center; white-space: nowrap; }")
         self.start_btn.clicked.connect(self.toggle_calling)
         self.stop_btn.clicked.connect(self.stop_calling)
         self.stop_btn.setEnabled(False)
         btn_layout.addWidget(self.start_btn)
         btn_layout.addWidget(self.stop_btn)
+        self.aggressive_checkbox = QCheckBox("Aggressive dialing")
+        auto_layout.addRow("", self.aggressive_checkbox)
         btn_layout.addStretch()
         auto_layout.addRow("", btn_layout)
 
@@ -121,18 +123,18 @@ class CallPanel(QWidget):
         if not number:
             self.logger.warning("Please enter a phone number")
             return
-        
+
         country_text = self.country_combo.currentText()
-        import re
         match = re.search(r'\+?(\d+)$', country_text)
         country_code = match.group(1) if match else ""
-        
+
         if country_code and not number.startswith('+'):
             full_number = f"+{country_code}{number}"
         else:
             full_number = number
-        
+
         self.calling_active = True
+        self.aggressive = self.aggressive_checkbox.isChecked()
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.logger.info(f"Starting automated calls to {full_number}")
@@ -153,27 +155,45 @@ class CallPanel(QWidget):
         if not self.modem.connected:
             self.stop_calling()
             return
+
+        # Hang up any previous call
+        self.modem.serial.send_command("ATH", timeout=1)
+
         number = self.phone_input.text().strip()
         country_text = self.country_combo.currentText()
-        import re
         match = re.search(r'\+?(\d+)$', country_text)
         country_code = match.group(1) if match else ""
-        
+
         if country_code and not number.startswith('+'):
             full_number = f"+{country_code}{number}"
         else:
             full_number = number
-        
+
         self.logger.info(f"Dialing {full_number}...")
         self.stat_panel.increment('dial_attempts')
+
         success = self.modem.dial(full_number)
-        if success:
-            self.logger.info("Call initiated")
-            self.stat_panel.increment('successful_calls')
-            QTimer.singleShot(10000, self.modem.hangup)
+
+        if self.aggressive:
+            # Aggressive mode: force hangup after 20 seconds, ignore answer
+            call_duration = 20
+            QTimer.singleShot(call_duration * 1000, self.force_hangup)
+            # Do not increment successful_calls
         else:
-            self.logger.error("Call failed")
-            self.stat_panel.increment('network_errors')
+            if success:
+                self.logger.info("Call initiated")
+                self.stat_panel.increment('successful_calls')
+                QTimer.singleShot(10000, self.modem.hangup)
+            else:
+                self.logger.error("Call failed")
+                self.stat_panel.increment('network_errors')
+                self.modem.serial.send_command("ATH", timeout=1)
+
+    def force_hangup(self):
+        """Force hangup for aggressive mode."""
+        self.logger.info("Aggressive mode: force hanging up current call")
+        self.modem.serial.send_command("ATH", timeout=1)
+        # The next call will be triggered by timer automatically
 
     def manual_dial(self):
         if not self.modem.connected:
@@ -182,15 +202,13 @@ class CallPanel(QWidget):
         number = self.quick_number.text().strip()
         if number:
             country_text = self.country_combo.currentText()
-            import re
             match = re.search(r'\+?(\d+)$', country_text)
             country_code = match.group(1) if match else ""
-            
             if country_code and not number.startswith('+'):
                 full_number = f"+{country_code}{number}"
             else:
                 full_number = number
-            
+
             self.logger.info(f"Manual dial {full_number}")
             self.stat_panel.increment('dial_attempts')
             success = self.modem.dial(full_number)
@@ -201,3 +219,4 @@ class CallPanel(QWidget):
             else:
                 self.logger.error("Call failed")
                 self.stat_panel.increment('network_errors')
+                self.modem.serial.send_command("ATH", timeout=1)
