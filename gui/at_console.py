@@ -19,6 +19,7 @@ class ATConsole(QWidget):
 
         # Output area
         self.output = QTextEdit()
+        self.output.document().setMaximumBlockCount(20)
         self.output.setReadOnly(True)
         self.output.setFontFamily("Courier New")
         layout.addWidget(QLabel("AT Command Log:"))

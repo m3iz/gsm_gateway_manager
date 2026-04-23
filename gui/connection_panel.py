@@ -97,16 +97,16 @@ class ConnectionPanel(QWidget):
         self.error_label.hide()
 
         row = 0
-        status_layout.addWidget(QLabel("Status:"), row, 0)
+        status_layout.addWidget(QLabel("Status:   "), row, 0)
         status_layout.addWidget(self.conn_status, row, 1); row += 1
-        status_layout.addWidget(QLabel("RSSI:"), row, 0)
+        status_layout.addWidget(QLabel("RSSI:   "), row, 0)
         status_layout.addWidget(self.signal_bar, row, 1)
         status_layout.addWidget(self.signal_percent_label, row, 2); row += 1
-        status_layout.addWidget(QLabel("Operator:"), row, 0)
+        status_layout.addWidget(QLabel("Operator:   "), row, 0)
         status_layout.addWidget(self.operator_label, row, 1, 1, 2); row += 1
-        status_layout.addWidget(QLabel("Operator Code:"), row, 0)
+        status_layout.addWidget(QLabel("Operator Code:   "), row, 0)
         status_layout.addWidget(self.operator_code_label, row, 1, 1, 2); row += 1
-        status_layout.addWidget(QLabel("SIM:"), row, 0)
+        status_layout.addWidget(QLabel("SIM:   "), row, 0)
         status_layout.addWidget(self.sim_status_label, row, 1, 1, 2); row += 1
 
         self.pin_btn = QPushButton("Enter PIN")
