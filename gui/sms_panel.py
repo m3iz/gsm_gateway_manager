@@ -6,6 +6,7 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                              QTextEdit, QSpinBox, QPushButton, QLabel,
                              QComboBox, QFormLayout, QMessageBox)
 from PyQt6.QtCore import Qt, pyqtSignal
+import time
 
 from utils.phonebook import Phonebook
 from gui.phonebook_dialog import PhonebookDialog
@@ -42,11 +43,13 @@ class SmsPanel(QWidget):
         self.sim1_radio = QRadioButton("SIM 1")
         self.sim2_radio = QRadioButton("SIM 2")
         self.sim1_radio.setChecked(True)
+        self.sim1_radio.setMinimumWidth(70)
+        self.sim2_radio.setMinimumWidth(70)
         self.sim_group = QButtonGroup(self)
         self.sim_group.addButton(self.sim1_radio, 1)
         self.sim_group.addButton(self.sim2_radio, 2)
-        sim_layout.addWidget(self.sim1_radio); self.sim1_radio.setMinimumWidth(70)
-        sim_layout.addWidget(self.sim2_radio); self.sim2_radio.setMinimumWidth(70)
+        sim_layout.addWidget(self.sim1_radio)
+        sim_layout.addWidget(self.sim2_radio)
         sim_layout.addStretch()
         form.addRow("SIM:", sim_layout)
 
@@ -85,7 +88,7 @@ class SmsPanel(QWidget):
         self.message_text.textChanged.connect(self.update_char_count)
         form.addRow("Message:", self.message_text)
 
-        # Quantity and send
+        # Quantity
         bottom_layout = QHBoxLayout()
         self.quantity_spin = QSpinBox()
         self.quantity_spin.setRange(1, 100)
@@ -93,14 +96,32 @@ class SmsPanel(QWidget):
         self.quantity_spin.setFixedWidth(70)
         self.char_count = QLabel("0/160")
         self.char_count.setStyleSheet("color: #888;")
-        self.send_btn = QPushButton("Send Send")
-        self.send_btn.clicked.connect(self.send_sms)
         bottom_layout.addWidget(QLabel("x"))
         bottom_layout.addWidget(self.quantity_spin)
         bottom_layout.addWidget(self.char_count)
         bottom_layout.addStretch()
-        bottom_layout.addWidget(self.send_btn)
-        form.addRow("", bottom_layout)
+        form.addRow("Quantity:", bottom_layout)
+
+        # Delay controls
+        delay_layout = QHBoxLayout()
+        self.sms_delay_spin = QSpinBox()
+        self.sms_delay_spin.setRange(1, 3600)
+        self.sms_delay_spin.setValue(2)
+        self.sms_delay_spin.setFixedWidth(80)
+        self.sms_delay_unit = QComboBox()
+        self.sms_delay_unit.addItems(["sec", "min"])
+        self.sms_delay_unit.setFixedWidth(90)
+        delay_layout.addWidget(self.sms_delay_spin)
+        delay_layout.addWidget(self.sms_delay_unit)
+        delay_layout.addStretch()
+        form.addRow("Delay:", delay_layout)
+
+        # Send button
+        self.send_btn = QPushButton("Send")
+        self.send_btn.setMinimumWidth(100)
+        self.send_btn.setStyleSheet("QPushButton { text-align: center; white-space: nowrap; }")
+        self.send_btn.clicked.connect(self.send_sms)
+        form.addRow("", self.send_btn)
 
         sms_group.setLayout(form)
         layout.addWidget(sms_group)
@@ -159,8 +180,12 @@ class SmsPanel(QWidget):
             return
 
         quantity = self.quantity_spin.value()
+        delay = self.sms_delay_spin.value()
+        if self.sms_delay_unit.currentText() == "min":
+            delay *= 60
+
         if quantity > 1:
-            reply = QMessageBox.question(self, "Confirm", f"Send {quantity} SMS?",
+            reply = QMessageBox.question(self, "Confirm", f"Send {quantity} SMS with {delay}s delay?",
                                         QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
             if reply != QMessageBox.StandardButton.Yes:
                 return
@@ -170,6 +195,8 @@ class SmsPanel(QWidget):
             if success:
                 self.logger.info(f"SMS {i+1}/{quantity} sent")
                 self.stat_panel.increment('sms_sent')
+                if i < quantity - 1 and delay > 0:
+                    time.sleep(delay)
             else:
                 self.logger.error(f"SMS {i+1}/{quantity} failed")
                 QMessageBox.critical(self, "Error", f"SMS {i+1} failed!")

@@ -30,7 +30,6 @@ class CallPanel(QWidget):
 
         number_layout = QHBoxLayout()
         self.country_combo = QComboBox()
-        # Extended country list with codes
         countries = [
             "(RU) Russia +7", "(US) USA +1", "(UA) Ukraine +380", "(DE) Germany +49",
             "(GB) UK +44", "(FR) France +33", "(IT) Italy +39", "(ES) Spain +34",
@@ -45,18 +44,17 @@ class CallPanel(QWidget):
             "(AR) Argentina +54", "(CL) Chile +56", "(PE) Peru +51", "(VE) Venezuela +58",
             "(MY) Malaysia +60", "(SG) Singapore +65", "(PH) Philippines +63", "(VN) Vietnam +84",
             "(TH) Thailand +66", "(ID) Indonesia +62", "(PK) Pakistan +92", "(BD) Bangladesh +880",
-            # New countries
             "(LV) Latvia +371", "(LT) Lithuania +370", "(EE) Estonia +372", "(BY) Belarus +375",
             "(KZ) Kazakhstan +7", "(GE) Georgia +995", "(AM) Armenia +374"
         ]
         self.country_combo.addItems(countries)
         self.country_combo.setMinimumWidth(150)
-        self.country_combo.setMaxVisibleItems(10)   # Scrollable list with 10 items visible
+        self.country_combo.setMaxVisibleItems(10)
         self.country_combo.setEditable(True)
         
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("Phone number")
-        self.phone_input.setMinimumWidth(200)       # Wider input field
+        self.phone_input.setMinimumWidth(200)
         number_layout.addWidget(self.country_combo)
         number_layout.addWidget(self.phone_input)
         auto_layout.addRow("Number:", number_layout)
@@ -75,9 +73,13 @@ class CallPanel(QWidget):
         auto_layout.addRow("Delay:", delay_layout)
 
         btn_layout = QHBoxLayout()
-        self.start_btn = QPushButton("Start Start")
+        self.start_btn = QPushButton("Start")
+        self.start_btn.setMinimumWidth(100)
+        self.start_btn.setStyleSheet("QPushButton { text-align: center; white-space: nowrap; }")
+        self.stop_btn = QPushButton("Stop")
+        self.stop_btn.setMinimumWidth(100)
+        self.stop_btn.setStyleSheet("QPushButton { text-align: center; white-space: nowrap; }")
         self.start_btn.clicked.connect(self.toggle_calling)
-        self.stop_btn = QPushButton("Stop Stop")
         self.stop_btn.clicked.connect(self.stop_calling)
         self.stop_btn.setEnabled(False)
         btn_layout.addWidget(self.start_btn)
@@ -120,14 +122,11 @@ class CallPanel(QWidget):
             self.logger.warning("Please enter a phone number")
             return
         
-        # Получаем код страны из выпадающего списка
         country_text = self.country_combo.currentText()
-        # Извлекаем код (последнее слово после пробела, например "+7" или "7")
         import re
         match = re.search(r'\+?(\d+)$', country_text)
         country_code = match.group(1) if match else ""
         
-        # Формируем полный номер
         if country_code and not number.startswith('+'):
             full_number = f"+{country_code}{number}"
         else:
@@ -143,73 +142,6 @@ class CallPanel(QWidget):
         self.call_timer.start(delay * 1000)
         self.place_call()
 
-    def manual_dial(self):
-        if not self.modem.connected:
-            self.logger.warning("Not connected")
-            return
-        number = self.quick_number.text().strip()
-        if number:
-            # Получаем код страны из выпадающего списка
-            country_text = self.country_combo.currentText()
-            import re
-            match = re.search(r'\+?(\d+)$', country_text)
-            country_code = match.group(1) if match else ""
-            
-            # Формируем полный номер
-            if country_code and not number.startswith('+'):
-                full_number = f"+{country_code}{number}"
-            else:
-                full_number = number
-            
-            self.logger.info(f"Manual dial {full_number}")
-            self.stat_panel.increment('dial_attempts')
-            success = self.modem.dial(full_number)
-            if success:
-                self.logger.info("Call initiated")
-                self.stat_panel.increment('successful_calls')
-                QTimer.singleShot(5000, self.modem.hangup)
-            else:
-                self.logger.error("Call failed")
-                self.stat_panel.increment('network_errors')
-        self.calling_active = False
-        self.call_timer.stop()
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.logger.info("Call automation stopped")
-
-    def place_call(self):
-        if not self.modem.connected:
-            self.stop_calling()
-            return
-        number = self.phone_input.text().strip()
-        self.logger.info(f"Dialing {number}...")
-        self.stat_panel.increment('dial_attempts')
-        success = self.modem.dial(number)
-        if success:
-            self.logger.info("Call initiated")
-            self.stat_panel.increment('successful_calls')
-            QTimer.singleShot(5000, self.modem.hangup)
-        else:
-            self.logger.error("Call failed")
-            self.stat_panel.increment('network_errors')
-
-    def manual_dial(self):
-        if not self.modem.connected:
-            self.logger.warning("Not connected")
-            return
-        number = self.quick_number.text().strip()
-        if number:
-            self.logger.info(f"Manual dial {number}")
-            self.stat_panel.increment('dial_attempts')
-            success = self.modem.dial(number)
-            if success:
-                self.logger.info("Call initiated")
-                self.stat_panel.increment('successful_calls')
-                QTimer.singleShot(5000, self.modem.hangup)
-            else:
-                self.logger.error("Call failed")
-                self.stat_panel.increment('network_errors')
-
     def stop_calling(self):
         self.calling_active = False
         self.call_timer.stop()
@@ -222,13 +154,11 @@ class CallPanel(QWidget):
             self.stop_calling()
             return
         number = self.phone_input.text().strip()
-        # Получаем код страны
         country_text = self.country_combo.currentText()
         import re
         match = re.search(r'\+?(\d+)$', country_text)
         country_code = match.group(1) if match else ""
         
-        # Формируем полный номер
         if country_code and not number.startswith('+'):
             full_number = f"+{country_code}{number}"
         else:
@@ -240,7 +170,34 @@ class CallPanel(QWidget):
         if success:
             self.logger.info("Call initiated")
             self.stat_panel.increment('successful_calls')
-            QTimer.singleShot(5000, self.modem.hangup)
+            QTimer.singleShot(10000, self.modem.hangup)
         else:
             self.logger.error("Call failed")
             self.stat_panel.increment('network_errors')
+
+    def manual_dial(self):
+        if not self.modem.connected:
+            self.logger.warning("Not connected")
+            return
+        number = self.quick_number.text().strip()
+        if number:
+            country_text = self.country_combo.currentText()
+            import re
+            match = re.search(r'\+?(\d+)$', country_text)
+            country_code = match.group(1) if match else ""
+            
+            if country_code and not number.startswith('+'):
+                full_number = f"+{country_code}{number}"
+            else:
+                full_number = number
+            
+            self.logger.info(f"Manual dial {full_number}")
+            self.stat_panel.increment('dial_attempts')
+            success = self.modem.dial(full_number)
+            if success:
+                self.logger.info("Call initiated")
+                self.stat_panel.increment('successful_calls')
+                QTimer.singleShot(10000, self.modem.hangup)
+            else:
+                self.logger.error("Call failed")
+                self.stat_panel.increment('network_errors')
