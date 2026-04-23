@@ -119,17 +119,58 @@ class CallPanel(QWidget):
         if not number:
             self.logger.warning("Please enter a phone number")
             return
+        
+        # Получаем код страны из выпадающего списка
+        country_text = self.country_combo.currentText()
+        # Извлекаем код (последнее слово после пробела, например "+7" или "7")
+        import re
+        match = re.search(r'\+?(\d+)$', country_text)
+        country_code = match.group(1) if match else ""
+        
+        # Формируем полный номер
+        if country_code and not number.startswith('+'):
+            full_number = f"+{country_code}{number}"
+        else:
+            full_number = number
+        
         self.calling_active = True
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.logger.info(f"Starting automated calls to {number}")
+        self.logger.info(f"Starting automated calls to {full_number}")
         delay = self.delay_spin.value()
         if self.delay_unit.currentText() == "min":
             delay *= 60
         self.call_timer.start(delay * 1000)
         self.place_call()
 
-    def stop_calling(self):
+    def manual_dial(self):
+        if not self.modem.connected:
+            self.logger.warning("Not connected")
+            return
+        number = self.quick_number.text().strip()
+        if number:
+            # Получаем код страны из выпадающего списка
+            country_text = self.country_combo.currentText()
+            import re
+            match = re.search(r'\+?(\d+)$', country_text)
+            country_code = match.group(1) if match else ""
+            
+            # Формируем полный номер
+            if country_code and not number.startswith('+'):
+                full_number = f"+{country_code}{number}"
+            else:
+                full_number = number
+            
+            self.logger.info(f"Manual dial {full_number}")
+            self.stat_panel.increment('dial_attempts')
+            success = self.modem.dial(full_number)
+            if success:
+                self.logger.info("Call initiated")
+                self.stat_panel.increment('successful_calls')
+                QTimer.singleShot(5000, self.modem.hangup)
+            else:
+                self.logger.error("Call failed")
+                self.stat_panel.increment('network_errors')
         self.calling_active = False
         self.call_timer.stop()
         self.start_btn.setEnabled(True)
@@ -168,3 +209,38 @@ class CallPanel(QWidget):
             else:
                 self.logger.error("Call failed")
                 self.stat_panel.increment('network_errors')
+
+    def stop_calling(self):
+        self.calling_active = False
+        self.call_timer.stop()
+        self.start_btn.setEnabled(True)
+        self.stop_btn.setEnabled(False)
+        self.logger.info("Call automation stopped")
+
+    def place_call(self):
+        if not self.modem.connected:
+            self.stop_calling()
+            return
+        number = self.phone_input.text().strip()
+        # Получаем код страны
+        country_text = self.country_combo.currentText()
+        import re
+        match = re.search(r'\+?(\d+)$', country_text)
+        country_code = match.group(1) if match else ""
+        
+        # Формируем полный номер
+        if country_code and not number.startswith('+'):
+            full_number = f"+{country_code}{number}"
+        else:
+            full_number = number
+        
+        self.logger.info(f"Dialing {full_number}...")
+        self.stat_panel.increment('dial_attempts')
+        success = self.modem.dial(full_number)
+        if success:
+            self.logger.info("Call initiated")
+            self.stat_panel.increment('successful_calls')
+            QTimer.singleShot(5000, self.modem.hangup)
+        else:
+            self.logger.error("Call failed")
+            self.stat_panel.increment('network_errors')

@@ -96,7 +96,7 @@ class GsmModem:
                     self.network_info['lac'] = str(int(lac_hex, 16))
                 if ci_hex:
                     self.network_info['ci'] = str(int(ci_hex, 16))
-                self._notify_network_info()
+                # self._notify_network_info()
         except Exception as e:
             print(f"Error parsing CREG: {e}")
 

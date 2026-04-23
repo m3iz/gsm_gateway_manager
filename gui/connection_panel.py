@@ -39,26 +39,6 @@ class ConnectionPanel(QWidget):
         self.refresh_timer.timeout.connect(self.update_network_display)
         self.refresh_timer.start(5000)
         self.refresh_ports()
-        self.modem.register_urc_callback(self.on_urc)
-
-    def on_urc(self, line):
-        if line.startswith("NETWORK_INFO:"):
-            import re
-            match = re.search(r"LAC=(d+), CI=(d+)", line)
-            if match:
-                self.lac_label.setText(match.group(1))
-                self.cell_id_label.setText(match.group(2))
-        if line.startswith("SIM_STATUS:"):
-            status = line.split(":", 1)[1].strip()
-            self.update_sim_ui(status)
-        elif line.startswith("OPERATOR:"):
-            operator = line.split(":", 1)[1].strip()
-            self.operator_label.setText(operator)
-            self.logger.info(f"Operator updated via URC: {operator}")
-        elif "SIM not inserted" in line:
-            self.update_sim_ui("SIM NOT INSERTED")
-        elif "+CPIN:" in line:
-            QTimer.singleShot(500, self.check_sim_and_pin)
 
     def init_ui(self):
         layout = QVBoxLayout()
@@ -71,13 +51,13 @@ class ConnectionPanel(QWidget):
         port_row = QHBoxLayout()
         self.port_combo = QComboBox()
         self.port_combo.setMinimumWidth(150)
-        self.refresh_ports_btn = QPushButton("↻")
-        self.refresh_ports_btn.setFixedWidth(30)
+        self.refresh_ports_btn = QPushButton("Refresh")
         self.refresh_ports_btn.clicked.connect(self.refresh_ports)
         port_row.addWidget(QLabel("Port:"))
         port_row.addWidget(self.port_combo)
         port_row.addWidget(self.refresh_ports_btn)
         port_row.addStretch()
+        
         baud_row = QHBoxLayout()
         self.baud_combo = QComboBox()
         self.baud_combo.addItems(["9600", "19200", "38400", "57600", "115200", "230400"])
@@ -85,9 +65,11 @@ class ConnectionPanel(QWidget):
         baud_row.addWidget(QLabel("Baudrate:"))
         baud_row.addWidget(self.baud_combo)
         baud_row.addStretch()
+        
         self.connect_btn = QPushButton("Connect")
         self.connect_btn.clicked.connect(self.toggle_connection)
         self.connect_btn.setMinimumHeight(30)
+        
         conn_layout.addLayout(port_row)
         conn_layout.addLayout(baud_row)
         conn_layout.addWidget(self.connect_btn)
@@ -100,18 +82,14 @@ class ConnectionPanel(QWidget):
         status_layout.setSpacing(2)
         self.conn_status = QLabel("Disconnected")
         self.conn_status.setStyleSheet("color: #ff5555; font-weight: bold;")
-        
-        # RSSI label and progress bar with percentage
         self.signal_bar = QProgressBar()
         self.signal_bar.setRange(0, 100)
         self.signal_bar.setValue(0)
         self.signal_bar.setTextVisible(False)
         self.signal_bar.setFixedHeight(8)
         self.signal_percent_label = QLabel("0%")
-        
         self.operator_label = QLabel("Unknown")
-        self.operator_code_label = QLabel("Unknown")  # MCC+MNC
-        self.cell_id_label = QLabel("Unknown")
+        self.operator_code_label = QLabel("Unknown")
         self.sim_status_label = QLabel("Unknown")
         self.error_label = QLabel("")
         self.error_label.setStyleSheet("color: #ff5555; font-size: 9pt;")
@@ -128,8 +106,6 @@ class ConnectionPanel(QWidget):
         status_layout.addWidget(self.operator_label, row, 1, 1, 2); row += 1
         status_layout.addWidget(QLabel("Operator Code:"), row, 0)
         status_layout.addWidget(self.operator_code_label, row, 1, 1, 2); row += 1
-        status_layout.addWidget(QLabel("Cell ID:"), row, 0)
-        status_layout.addWidget(self.cell_id_label, row, 1, 1, 2); row += 1
         status_layout.addWidget(QLabel("SIM:"), row, 0)
         status_layout.addWidget(self.sim_status_label, row, 1, 1, 2); row += 1
 
@@ -161,16 +137,28 @@ class ConnectionPanel(QWidget):
 
     def refresh_ports(self):
         self.port_combo.clear()
-        ports = self.modem.serial.get_available_ports()
-        if ports:
-            for port in ports:
-                if isinstance(port, dict):
-                    display = f"{port['device']} - {port.get('description', '')}" if port.get('description') else port['device']
-                else:
-                    display = port
-                self.port_combo.addItem(display, port if isinstance(port, dict) else port)
+        all_ports = self.modem.serial.get_available_ports()
+        
+        TARGET_VID = 0x0403
+        TARGET_PID = 0x6001
+        
+        filtered_ports = []
+        for port_name in all_ports:
+            info = self.modem.serial.get_device_info(port_name)
+            if info:
+                if info.get('vid') == TARGET_VID and info.get('pid') == TARGET_PID:
+                    display_name = "NX-ICE"
+                    if info.get('product'):
+                        display_name = f"{info['product']}"
+                    filtered_ports.append((port_name, display_name))
+        
+        if filtered_ports:
+            for port_name, display_name in filtered_ports:
+                self.port_combo.addItem(display_name, port_name)
+            if self.port_combo.count() > 0:
+                self.port_combo.setCurrentIndex(0)
         else:
-            self.port_combo.addItem("No ports found")
+            self.port_combo.addItem("No NX-ICE devices found")
 
     def toggle_connection(self):
         if self.modem.connected:
@@ -184,15 +172,10 @@ class ConnectionPanel(QWidget):
             self.connection_changed.emit(False)
             self.logger.info("Disconnected from modem")
         else:
-            port_data = self.port_combo.currentData()
-            if not port_data:
-                port_text = self.port_combo.currentText()
-                if "No ports" in port_text:
-                    QMessageBox.warning(self, "No Ports", "No COM ports available!")
-                    return
-                port = port_text.split(' - ')[0]
-            else:
-                port = port_data if isinstance(port_data, str) else port_data.get('device', str(port_data))
+            port = self.port_combo.currentData()
+            if not port or "No NX-ICE" in self.port_combo.currentText():
+                QMessageBox.warning(self, "No Device", "No NX-ICE device selected!")
+                return
             baudrate = int(self.baud_combo.currentText())
             self.logger.info(f"Connecting to {port} at {baudrate} baud...")
             self.connect_btn.setEnabled(False)
@@ -275,17 +258,13 @@ class ConnectionPanel(QWidget):
         percent = self.modem.get_signal_percent()
         self.signal_bar.setValue(percent)
         self.signal_percent_label.setText(f"{percent}%")
-        # Operator name
         self.operator_label.setText(self.modem.operator[:20])
-        # Operator code (MCC+MNC) from network_info
         mcc = self.modem.network_info.get('mcc', '')
         mnc = self.modem.network_info.get('mnc', '')
         if mcc and mnc:
             self.operator_code_label.setText(f"{mcc}{mnc}")
         else:
             self.operator_code_label.setText("Unknown")
-        ci = self.modem.network_info.get('ci', 'Unknown')
-        self.cell_id_label.setText(str(ci)[:10])
 
     def send_quick_cmd(self, cmd):
         if not self.modem.connected:

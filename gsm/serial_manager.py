@@ -86,3 +86,19 @@ class SerialManager:
     def set_rx_callback(self, callback: Callable[[str], None]):
         """Set callback for unsolicited result codes."""
         self.rx_callback = callback
+
+    def get_device_info(self, port_name: str) -> Optional[dict]:
+        """Get detailed information about a specific port."""
+        for port in serial.tools.list_ports.comports():
+            if port.device == port_name:
+                return {
+                    'device': port.device,
+                    'description': port.description,
+                    'manufacturer': port.manufacturer,
+                    'product': port.product,
+                    'vid': port.vid,
+                    'pid': port.pid,
+                    'serial_number': port.serial_number,
+                    'hwid': port.hwid,
+                }
+        return None

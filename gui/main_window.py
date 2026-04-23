@@ -105,8 +105,8 @@ class MainWindow(QMainWindow):
         top_panel = QWidget()
         top_panel.setStyleSheet("QWidget { background-color: #2d2d2d; border-radius: 5px; }")
         top_layout = QHBoxLayout(top_panel)
-        top_layout.setContentsMargins(10, 10, 10, 10)
-        top_layout.setSpacing(10)
+        top_layout.setContentsMargins(5, 5, 5, 5)
+        top_layout.setSpacing(5)
         
         # Create panels
         self.stat_panel = StatisticsPanel(self.logger)
