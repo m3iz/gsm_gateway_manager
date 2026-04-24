@@ -223,15 +223,43 @@ class GsmModem:
     def send_sms(self, number: str, text: str) -> bool:
         if not self.connected:
             return False
-        self.serial.send_command(at.AT_CMGF.format(1))
+        # Set text mode
+        resp = self.serial.send_command(at.AT_CMGF.format(1), timeout=3)
+        if not any('OK' in line for line in resp):
+            self.logger.error("Failed to set SMS text mode")
+            return False
+        # Send command
         cmd = at.AT_CMGS.format(number)
-        resp = self.serial.send_command(cmd, expected_response='>', timeout=5)
+        resp = self.serial.send_command(cmd, expected_response='>', timeout=10)
         if any('>' in line for line in resp):
-            self.serial.port.write((text + '\x1A').encode())
-            self.serial.port.flush()
-            time.sleep(2)
-            return True
-        return False
+            # Send message text and Ctrl+Z
+            try:
+                self.serial.port.write((text + '\x1A').encode())
+                self.serial.port.flush()
+                # Wait for final response
+                time.sleep(2)
+                final_resp = []
+                start = time.time()
+                while time.time() - start < 5:
+                    if self.serial.port.in_waiting:
+                        line = self.serial.port.readline().decode('utf-8', errors='ignore').strip()
+                        if line:
+                            final_resp.append(line)
+                            if 'OK' in line or 'ERROR' in line or '+CMS ERROR' in line:
+                                break
+                    else:
+                        time.sleep(0.1)
+                if any('OK' in line for line in final_resp):
+                    return True
+                else:
+                    self.logger.error(f"SMS final response: {final_resp}")
+                    return False
+            except Exception as e:
+                self.logger.error(f"SMS send error: {e}")
+                return False
+        else:
+            self.logger.error("No '>' prompt for SMS")
+            return False
 
     def get_signal_percent(self) -> int:
         rssi = self.signal_strength
