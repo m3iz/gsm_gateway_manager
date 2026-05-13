@@ -25,8 +25,8 @@ class SerialManager:
         try:
             self.port = serial.Serial(port, baudrate, timeout=timeout)
             self.running = True
-            # self.rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
-            # self.rx_thread.start()
+            self.rx_thread = threading.Thread(target=self._rx_loop, daemon=True)
+            self.rx_thread.start()
             return True, "Connected"
         except Exception as e:
             return False, str(e)

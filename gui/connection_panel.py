@@ -39,6 +39,7 @@ class ConnectionPanel(QWidget):
         self.refresh_timer.timeout.connect(self.update_network_display)
         self.refresh_timer.start(5000)
         self.refresh_ports()
+        # self.modem.serial.set_rx_callback(self.on_urc)
 
     def init_ui(self):
         layout = QVBoxLayout()
