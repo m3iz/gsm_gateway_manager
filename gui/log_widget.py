@@ -7,9 +7,11 @@ class LogWidget(QTextEdit):
         super().__init__()
         self.setReadOnly(True)
         self.setFontFamily("Courier New")
-        self.document().setMaximumBlockCount(20)
+        self.document().setMaximumBlockCount(100)
 
     def append_log(self, text: str):
         self.setTextColor(QColor(200, 200, 200))
         self.append(text)
-        self.moveCursor(QTextCursor.MoveOperation.End)
+        # Проверяем, что есть хотя бы один блок, чтобы избежать ошибки
+        if self.document().blockCount() > 0:
+            self.moveCursor(QTextCursor.MoveOperation.End)

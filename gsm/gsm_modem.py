@@ -5,11 +5,13 @@ import threading
 import time
 from typing import Optional, Callable, List
 from .serial_manager import SerialManager
+from utils.logger import Logger
 from . import at_commands as at
 
 class GsmModem:
     def __init__(self):
         self.serial = SerialManager()
+        self.logger = Logger()
         self.connected = False
         self.active_sim = 1
         self.signal_strength = 0
@@ -227,7 +229,6 @@ class GsmModem:
         # Set text mode
         resp = self.serial.send_command(at.AT_CMGF.format(1), timeout=3)
         if not any('OK' in line for line in resp):
-            self.logger.error("Failed to set SMS text mode")
             return False
         # Send command
         cmd = at.AT_CMGS.format(number)
@@ -253,13 +254,10 @@ class GsmModem:
                 if any('OK' in line for line in final_resp):
                     return True
                 else:
-                    self.logger.error(f"SMS final response: {final_resp}")
                     return False
             except Exception as e:
-                self.logger.error(f"SMS send error: {e}")
                 return False
         else:
-            self.logger.error("No '>' prompt for SMS")
             return False
 
     def get_signal_percent(self) -> int:
