@@ -224,11 +224,13 @@ class GsmModem:
             self.serial.send_command(at.ATH)
 
     def send_sms(self, number: str, text: str) -> bool:
+        """Send a single SMS without blocking UI."""
         if not self.connected:
             return False
         # Set text mode
         resp = self.serial.send_command(at.AT_CMGF.format(1), timeout=3)
         if not any('OK' in line for line in resp):
+            self.logger.error("Failed to set SMS text mode")
             return False
         # Send command
         cmd = at.AT_CMGS.format(number)
@@ -239,7 +241,7 @@ class GsmModem:
                 self.serial.port.write((text + '\x1A').encode())
                 self.serial.port.flush()
                 # Wait for final response
-                time.sleep(2)
+                time.sleep(0.5)
                 final_resp = []
                 start = time.time()
                 while time.time() - start < 5:
@@ -250,14 +252,13 @@ class GsmModem:
                             if 'OK' in line or 'ERROR' in line or '+CMS ERROR' in line:
                                 break
                     else:
-                        time.sleep(0.1)
-                if any('OK' in line for line in final_resp):
-                    return True
-                else:
-                    return False
+                        time.sleep(0.05)
+                return any('OK' in line for line in final_resp)
             except Exception as e:
+                self.logger.error(f"SMS send error: {e}")
                 return False
         else:
+            self.logger.error("No '>' prompt for SMS")
             return False
 
     def get_signal_percent(self) -> int:

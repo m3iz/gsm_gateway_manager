@@ -6,10 +6,10 @@ from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                              QTextEdit, QSpinBox, QPushButton, QLabel,
                              QComboBox, QFormLayout, QMessageBox)
 from PyQt6.QtCore import Qt, pyqtSignal
-import time
 
 from utils.phonebook import Phonebook
 from gui.phonebook_dialog import PhonebookDialog
+from gui.sms_worker import SmsWorker
 
 class SmsPanel(QWidget):
     def __init__(self, modem, logger, stat_panel):
@@ -25,6 +25,7 @@ class SmsPanel(QWidget):
             "Info": "Important information...",
             "Reminder": "Reminder: Don't forget..."
         }
+        self.sms_worker = None
         self.init_ui()
 
     def init_ui(self):
@@ -37,7 +38,7 @@ class SmsPanel(QWidget):
         form.setSpacing(3)
         form.setLabelAlignment(Qt.AlignmentFlag.AlignRight)
 
-        # SIM selector - horizontal
+        # SIM selector
         sim_layout = QHBoxLayout()
         sim_layout.setSpacing(20)
         self.sim1_radio = QRadioButton("SIM 1")
@@ -53,7 +54,7 @@ class SmsPanel(QWidget):
         sim_layout.addStretch()
         form.addRow("SIM:", sim_layout)
 
-        # Phone number with phonebook
+        # Phone number
         number_layout = QHBoxLayout()
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("Phone number")
@@ -88,7 +89,21 @@ class SmsPanel(QWidget):
         self.message_text.textChanged.connect(self.update_char_count)
         form.addRow("Message:", self.message_text)
 
-        # Quantity
+        # Delay controls
+        delay_layout = QHBoxLayout()
+        self.sms_delay_spin = QSpinBox()
+        self.sms_delay_spin.setRange(0, 60)
+        self.sms_delay_spin.setValue(1)
+        self.sms_delay_spin.setFixedWidth(80)
+        self.sms_delay_unit = QComboBox()
+        self.sms_delay_unit.addItems(["seconds", "minutes"])
+        self.sms_delay_unit.setFixedWidth(90)
+        delay_layout.addWidget(self.sms_delay_spin)
+        delay_layout.addWidget(self.sms_delay_unit)
+        delay_layout.addStretch()
+        form.addRow("Delay:", delay_layout)
+
+        # Quantity and send
         bottom_layout = QHBoxLayout()
         self.quantity_spin = QSpinBox()
         self.quantity_spin.setRange(1, 100)
@@ -96,32 +111,14 @@ class SmsPanel(QWidget):
         self.quantity_spin.setFixedWidth(70)
         self.char_count = QLabel("0/160")
         self.char_count.setStyleSheet("color: #888;")
+        self.send_btn = QPushButton("Send")
+        self.send_btn.clicked.connect(self.send_sms)
         bottom_layout.addWidget(QLabel("x"))
         bottom_layout.addWidget(self.quantity_spin)
         bottom_layout.addWidget(self.char_count)
         bottom_layout.addStretch()
-        form.addRow("Quantity:", bottom_layout)
-
-        # Delay controls
-        delay_layout = QHBoxLayout()
-        self.sms_delay_spin = QSpinBox()
-        self.sms_delay_spin.setRange(1, 3600)
-        self.sms_delay_spin.setValue(2)
-        self.sms_delay_spin.setFixedWidth(80)
-        self.sms_delay_unit = QComboBox()
-        self.sms_delay_unit.addItems(["sec", "min"])
-        self.sms_delay_unit.setFixedWidth(90)
-        delay_layout.addWidget(self.sms_delay_spin)
-        delay_layout.addWidget(self.sms_delay_unit)
-        delay_layout.addStretch()
-        form.addRow("Delay:", delay_layout)
-
-        # Send button
-        self.send_btn = QPushButton("Send")
-        self.send_btn.setMinimumWidth(100)
-        self.send_btn.setStyleSheet("QPushButton { text-align: center; white-space: nowrap; }")
-        self.send_btn.clicked.connect(self.send_sms)
-        form.addRow("", self.send_btn)
+        bottom_layout.addWidget(self.send_btn)
+        form.addRow("", bottom_layout)
 
         sms_group.setLayout(form)
         layout.addWidget(sms_group)
@@ -160,7 +157,6 @@ class SmsPanel(QWidget):
     def send_sms(self):
         if not self.modem.connected:
             self.logger.warning("Not connected")
-            QMessageBox.warning(self, "Error", "Modem not connected!")
             return
 
         selected_sim = self.sim_group.checkedId()
@@ -181,7 +177,7 @@ class SmsPanel(QWidget):
 
         quantity = self.quantity_spin.value()
         delay = self.sms_delay_spin.value()
-        if self.sms_delay_unit.currentText() == "min":
+        if delay > 0 and self.sms_delay_unit.currentText() == "minutes":
             delay *= 60
 
         if quantity > 1:
@@ -190,14 +186,25 @@ class SmsPanel(QWidget):
             if reply != QMessageBox.StandardButton.Yes:
                 return
 
-        for i in range(quantity):
-            success = self.modem.send_sms(number, message)
-            if success:
-                self.logger.info(f"SMS {i+1}/{quantity} sent")
-                self.stat_panel.increment('sms_sent')
-                if i < quantity - 1 and delay > 0:
-                    time.sleep(delay)
-            else:
-                self.logger.error(f"SMS {i+1}/{quantity} failed")
-                QMessageBox.critical(self, "Error", f"SMS {i+1} failed!")
-                break
+        # Запускаем поток
+        self.sms_worker = SmsWorker(self.modem, number, message, quantity, delay)
+        self.sms_worker.progress.connect(self.on_sms_progress)
+        self.sms_worker.finished.connect(self.on_sms_finished)
+        self.sms_worker.log.connect(self.logger.info)
+        self.send_btn.setEnabled(False)
+        self.sms_worker.start()
+
+    def on_sms_progress(self, current, total):
+        self.send_btn.setText(f"Sending {current}/{total}")
+        self.logger.info(f"Sending SMS {current}/{total}...")
+
+    def on_sms_finished(self, success, error_msg):
+        self.send_btn.setEnabled(True)
+        self.send_btn.setText("Send")
+        if success:
+            self.logger.info("All SMS sent successfully")
+            self.stat_panel.increment('sms_sent', self.quantity_spin.value())
+            QMessageBox.information(self, "Success", "All SMS sent successfully!")
+        else:
+            self.logger.error(error_msg)
+            QMessageBox.critical(self, "Error", error_msg)

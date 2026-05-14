@@ -59,7 +59,9 @@ class StatisticsPanel(QWidget):
         for key, label in self.labels.items():
             label.setText(str(self.stats[key]))
 
-    def increment(self, key):
+    def increment(self, key, count=1):
+        if key in self.stats:
+            self.stats[key] += count
         if key in self.stats:
             self.stats[key] += 1
 
