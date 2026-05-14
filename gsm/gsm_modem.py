@@ -153,7 +153,7 @@ class GsmModem:
             self.last_error = "Modem not connected"
             return False
         cmd = f"AT+CPIN={pin}"
-        resp = self.serial.send_command(cmd, timeout=5)
+        resp = self.serial.send_command(cmd, timeout=10)
         if any('OK' in line for line in resp):
             self.check_sim_status()
             return True

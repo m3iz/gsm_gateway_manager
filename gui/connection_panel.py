@@ -37,7 +37,7 @@ class ConnectionPanel(QWidget):
         self.init_ui()
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.update_network_display)
-        self.refresh_timer.start(5000)
+        self.refresh_timer.start(30000)
         self.refresh_ports()
 
     def init_ui(self):

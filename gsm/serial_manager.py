@@ -53,7 +53,7 @@ class SerialManager:
             except Exception:
                 break
 
-    def send_command(self, command: str, expected_response: Optional[str] = None, timeout: float = 5) -> list:
+    def send_command(self, command: str, expected_response: Optional[str] = None, timeout: float = 10) -> list:
         """
         Send an AT command and wait for response.
         Returns list of response lines.
