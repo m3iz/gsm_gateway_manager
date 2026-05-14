@@ -1,7 +1,8 @@
-import time
 """
 Call automation panel with dialing controls.
 """
+import re
+import time
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                              QComboBox, QLineEdit, QSpinBox, QPushButton,
                              QLabel, QFormLayout, QCheckBox)
@@ -14,19 +15,19 @@ class CallPanel(QWidget):
         self.logger = logger
         self.stat_panel = stat_panel
         self.calling_active = False
+        self.aggressive = False
+        self.aggressive_timer = None
         self.call_timer = QTimer()
         self.call_timer.timeout.connect(self.place_call)
-        self.aggressive = False  # флаг агрессивного режима
         self.init_ui()
+        # Регистрируем обработчик URC для агрессивного режима
         self.modem.serial.set_rx_callback(self.on_urc_aggressive)
-        self.aggressive_alerting = False
 
     def init_ui(self):
         layout = QVBoxLayout()
         layout.setContentsMargins(3, 3, 3, 3)
         layout.setSpacing(3)
 
-        # Call Automation Group
         auto_group = QGroupBox("Call Automation")
         auto_layout = QFormLayout()
         auto_layout.setSpacing(3)
@@ -55,7 +56,6 @@ class CallPanel(QWidget):
         self.country_combo.setMinimumWidth(150)
         self.country_combo.setMaxVisibleItems(10)
         self.country_combo.setEditable(True)
-
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("Phone number")
         self.phone_input.setMinimumWidth(200)
@@ -76,8 +76,7 @@ class CallPanel(QWidget):
         delay_layout.addStretch()
         auto_layout.addRow("Delay:", delay_layout)
 
-        # Aggressive mode checkbox
-        self.aggressive_checkbox = QCheckBox("Aggressive dialing (force hangup after 3 sec)")
+        self.aggressive_checkbox = QCheckBox("Aggressive dialing (force hangup after alerting)")
         auto_layout.addRow("", self.aggressive_checkbox)
 
         btn_layout = QHBoxLayout()
@@ -94,7 +93,6 @@ class CallPanel(QWidget):
         auto_group.setLayout(auto_layout)
         layout.addWidget(auto_group)
 
-        # Manual Call Group
         manual_group = QGroupBox("Manual Call")
         manual_layout = QHBoxLayout()
         self.quick_number = QLineEdit()
@@ -102,7 +100,7 @@ class CallPanel(QWidget):
         self.dial_btn = QPushButton("Dial")
         self.dial_btn.clicked.connect(self.manual_dial)
         self.hangup_btn = QPushButton("Hang Up")
-        self.hangup_btn.clicked.connect(self.hangup_manual)
+        self.hangup_btn.clicked.connect(self.modem.hangup)
         manual_layout.addWidget(self.quick_number)
         manual_layout.addWidget(self.dial_btn)
         manual_layout.addWidget(self.hangup_btn)
@@ -126,64 +124,75 @@ class CallPanel(QWidget):
             self.logger.warning("Please enter a phone number")
             return
 
-        # Получаем код страны из выпадающего списка
         country_text = self.country_combo.currentText()
-        import re
         match = re.search(r'\+?(\d+)$', country_text)
         country_code = match.group(1) if match else ""
-        
+
         if country_code and not number.startswith('+'):
             full_number = f"+{country_code}{number}"
         else:
             full_number = number
-        
+
         self.calling_active = True
         self.aggressive = self.aggressive_checkbox.isChecked()
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
-        self.logger.info(f"Starting automated calls to {full_number}")
+        self.logger.info(f"Starting automated calls to {full_number} (aggressive={self.aggressive})")
         delay = self.delay_spin.value()
         if self.delay_unit.currentText() == "min":
             delay *= 60
         self.call_timer.start(delay * 1000)
         self.current_number = full_number
+        # Immediately place first call
         self.place_call()
+
+    def stop_calling(self):
         self.calling_active = False
+        self.aggressive = False
+        if self.aggressive_timer:
+            self.aggressive_timer.stop()
+            self.aggressive_timer = None
         self.call_timer.stop()
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.logger.info("Call automation stopped")
+        # Hang up any ongoing call
+        self.modem.serial.send_command("ATH", timeout=1)
 
     def place_call(self):
         if not self.modem.connected:
             self.stop_calling()
             return
-        
-        # Сброс предыдущего вызова
+
+        # Сброс перед новым вызовом
         self.modem.serial.send_command("ATH", timeout=1)
-        
+
         number = getattr(self, 'current_number', None)
         if not number:
             self.logger.error("No number to call")
             self.stop_calling()
             return
-        
+
         self.logger.info(f"Dialing {number}...")
         self.stat_panel.increment('dial_attempts')
         success = self.modem.dial(number)
-        
+
         if self.aggressive:
+            # Агрессивный режим: ждем сигнала гудков (alerting) через URC
+            self.logger.info("Aggressive mode: waiting for alerting (ringing) up to 30 seconds...")
             self.aggressive_alerting = False
-            self.aggressive_alerting = False
-            self.logger.info("Aggressive mode: waiting for alerting (ringing) up to 30 sec...")
-            start_wait = time.time()
-            while not self.aggressive_alerting and (time.time() - start_wait) < 30:
-                time.sleep(0.2)
-            if self.aggressive_alerting:
-                self.logger.info("Aggressive mode: alerting detected, call will be hung up by URC handler")
-            else:
-                self.logger.warning("Aggressive mode: no alerting within 30 sec, force hangup")
-                self.modem.serial.send_command("ATH", timeout=1)
+            # Устанавливаем таймер на 30 секунд
+            if self.aggressive_timer:
+                self.aggressive_timer.stop()
+            self.aggressive_timer = QTimer()
+            self.aggressive_timer.setSingleShot(True)
+            self.aggressive_timer.timeout.connect(self.aggressive_timeout)
+            self.aggressive_timer.start(30000)  # 30 sec timeout
+            # Ожидание будет неблокирующим, но нам нужно как-то дождаться события.
+            # Мы не используем цикл while, а полагаемся на callback.
+            # Однако нужно предотвратить повторные вызовы до получения результата.
+            # Поставим флаг, что ожидаем alerting.
+            self.waiting_for_alert = True
         else:
             if success:
                 self.logger.info("Call initiated")
@@ -193,10 +202,48 @@ class CallPanel(QWidget):
                 self.logger.error("Call failed")
                 self.stat_panel.increment('network_errors')
                 self.modem.serial.send_command("ATH", timeout=1)
-        """Принудительно завершает вызов в агрессивном режиме."""
-        self.logger.info("Aggressive mode: force hanging up")
-        self.modem.serial.send_command("ATH", timeout=1)
-        # Не увеличиваем статистику успешных вызовов
+
+    def on_urc_aggressive(self, line):
+        """Обработка URC для агрессивного режима."""
+        if not self.aggressive or not self.calling_active:
+            return
+        if not hasattr(self, 'waiting_for_alert') or not self.waiting_for_alert:
+            return
+        # Проверяем начало гудков (alerting)
+        if "+CLCC:" in line and ",2," in line:  # 2 = alerting
+            self.logger.info("Aggressive mode: alerting detected (ringing), hanging up")
+            self.modem.serial.send_command("ATH", timeout=1)
+            self.aggressive_alerting = True
+            self.waiting_for_alert = False
+            if self.aggressive_timer:
+                self.aggressive_timer.stop()
+            # Запускаем следующий вызов по таймеру задержки
+            self.proceed_to_next()
+        elif "VOICE CALL: BEGIN" in line:
+            self.logger.info("Aggressive mode: call initiated, hanging up")
+            self.modem.serial.send_command("ATH", timeout=1)
+            self.aggressive_alerting = True
+            self.waiting_for_alert = False
+            if self.aggressive_timer:
+                self.aggressive_timer.stop()
+            self.proceed_to_next()
+
+    def aggressive_timeout(self):
+        """Таймаут ожидания alerting."""
+        if self.waiting_for_alert:
+            self.logger.warning("Aggressive mode: no alerting within 30 sec, force hangup")
+            self.modem.serial.send_command("ATH", timeout=1)
+            self.waiting_for_alert = False
+            self.proceed_to_next()
+
+    def proceed_to_next(self):
+        """Переход к следующему вызову после задержки."""
+        if not self.calling_active:
+            return
+        # Ждем задержки между вызовами (уже настроена в call_timer)
+        # call_timer сам вызовет place_call через delay.
+        # Ничего дополнительно не делаем.
+        pass
 
     def manual_dial(self):
         if not self.modem.connected:
@@ -204,9 +251,7 @@ class CallPanel(QWidget):
             return
         number = self.quick_number.text().strip()
         if number:
-            # Получаем код страны (по умолчанию из выпадающего списка, но можно не использовать)
             country_text = self.country_combo.currentText()
-            import re
             match = re.search(r'\+?(\d+)$', country_text)
             country_code = match.group(1) if match else ""
             if country_code and not number.startswith('+'):
@@ -219,44 +264,12 @@ class CallPanel(QWidget):
             if success:
                 self.logger.info("Call initiated")
                 self.stat_panel.increment('successful_calls')
+                QTimer.singleShot(10000, self.modem.hangup)
             else:
                 self.logger.error("Call failed")
                 self.stat_panel.increment('network_errors')
+                self.modem.serial.send_command("ATH", timeout=1)
 
-    def hangup_manual(self):
-        self.logger.info("Manual hangup")
-        self.modem.hangup()
-
-    def on_urc_aggressive(self, line):
-        """Обработка URC для агрессивного режима: отслеживание гудков."""
-        if not self.aggressive:
-            return
-        if "+CLCC:" in line and ",2" in line:  # 2 = alerting (гудки)
-            self.logger.info("Aggressive mode: alerting detected (ringing), hanging up")
-            self.modem.serial.send_command("ATH", timeout=1)
-            self.aggressive_alerting = True
-        elif "VOICE CALL: BEGIN" in line:
-            self.logger.info("Aggressive mode: call initiated, hanging up")
-            self.modem.serial.send_command("ATH", timeout=1)
-            self.aggressive_alerting = True
-
-    def stop_calling(self):
-        self.aggressive = False
-        self.calling_active = False
-        if hasattr(self, 'call_timer'):
-            self.call_timer.stop()
-        self.start_btn.setEnabled(True)
-        self.stop_btn.setEnabled(False)
-        self.logger.info("Call automation stopped")
-
-    def on_urc_aggressive(self, line):
-        if not hasattr(self, 'aggressive') or not self.aggressive:
-            return
-        if "+CLCC:" in line and ",2" in line:
-            self.logger.info("Aggressive mode: alerting detected (ringing), hanging up")
-            self.modem.serial.send_command("ATH", timeout=1)
-            self.aggressive_alerting = True
-        elif "VOICE CALL: BEGIN" in line:
-            self.logger.info("Aggressive mode: call initiated, hanging up")
-            self.modem.serial.send_command("ATH", timeout=1)
-            self.aggressive_alerting = True
+    def hangup_and_wait(self):
+        self.logger.info("Hanging up current call...")
+        self.modem.serial.send_command("ATH", timeout=2)
