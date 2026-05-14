@@ -33,16 +33,15 @@ class GsmModem:
             if any('OK' in line for line in resp):
                 self.connected = True
                 self.serial.send_command(at.ATE0, timeout=2)
-            # Disable auto hangup for voice calls
-            self.serial.send_command("AT+CVHU=0", timeout=2)
-        self.serial.set_rx_callback(self._handle_urc)
-                # Включить расширенный режим отчёта о регистрации
-        self.serial.send_command("AT+CREG=2", timeout=2)
-        self.check_sim_status()
-        self.update_network_info()
-        return True
-        time.sleep(1)
+                # Disable auto hangup for voice calls
+                self.serial.send_command("AT+CVHU=0", timeout=2)
+                self.serial.set_rx_callback(self._handle_urc)
+                self.check_sim_status()
+                self.update_network_info()
+                return True
+            time.sleep(1)
         self.serial.disconnect()
+        self.connected = False
         self.last_error = "No response to AT command"
         return False
 

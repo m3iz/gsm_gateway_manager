@@ -138,6 +138,7 @@ class CallPanel(QWidget):
             full_number = number
         
         self.calling_active = True
+        self.aggressive = self.aggressive_checkbox.isChecked()
         self.start_btn.setEnabled(False)
         self.stop_btn.setEnabled(True)
         self.logger.info(f"Starting automated calls to {full_number}")
@@ -172,6 +173,7 @@ class CallPanel(QWidget):
         success = self.modem.dial(number)
         
         if self.aggressive:
+            self.aggressive_alerting = False
             self.aggressive_alerting = False
             self.logger.info("Aggressive mode: waiting for alerting (ringing) up to 30 sec...")
             start_wait = time.time()
@@ -239,6 +241,7 @@ class CallPanel(QWidget):
             self.aggressive_alerting = True
 
     def stop_calling(self):
+        self.aggressive = False
         self.calling_active = False
         if hasattr(self, 'call_timer'):
             self.call_timer.stop()
