@@ -146,7 +146,7 @@ class CallPanel(QWidget):
         self.logger.info("Call automation stopped")
         # Hangup any active call
         self.modem.serial.send_command("ATH", timeout=2)
-        time.sleep(0.5)
+        time.sleep(1)
         if self.modem.serial.port and self.modem.serial.port.is_open:
             try:
                 self.modem.serial.port.reset_input_buffer()
@@ -155,6 +155,17 @@ class CallPanel(QWidget):
         self._start_network_timer()
 
     def place_call(self):
+        self._stop_waiting()
+        self.call_timer.stop()
+        if hasattr(self, "monitor_timer"):
+            self.monitor_timer = None
+        if hasattr(self, "answer_timer"):
+            self.answer_timer = None
+        self._stop_waiting()
+        self.modem.serial.send_command("ATH", timeout=2)
+        time.sleep(0.5)
+        self._stop_waiting()
+        self._stop_waiting()
         if not self.calling_active:
             return
         # Clean buffer and force hangup before call
@@ -177,6 +188,8 @@ class CallPanel(QWidget):
         self.stat_panel.increment('dial_attempts')
         # Send ATD
         resp = self.modem.serial.send_command(f"ATD{full_number};", timeout=10)
+        self.logger.info(f"ATD response: {resp}")
+        self.logger.info(f"ATD response: {resp}")
         if not resp or not any('OK' in line for line in resp):
             self.logger.error(f"Call failed (no OK), response: {resp}")
             self.stat_panel.increment('network_errors')
@@ -224,15 +237,20 @@ class CallPanel(QWidget):
                         state = parts[2].strip()
                         if state == '0':
                             self.logger.info("Call answered (connected)!")
+                            self._stop_waiting()
                             self.stat_panel.increment('successful_calls')
                             self._stop_waiting()
                             # Hangup and wait for OK
-                            self.modem.serial.send_command("ATH", timeout=2)
-                            time.sleep(0.5)
+                            ##self.modem.serial.send_command("ATH", timeout=2)
+                            time.sleep(1)
                             self._schedule_next()
                             return
                 # Detect early end
                 if 'NO CARRIER' in line or 'BUSY' in line:
+                    self.modem.serial.send_command("ATH", timeout=3)
+                    time.sleep(1)
+                    if self.modem.serial.port and self.modem.serial.port.is_open:
+                        self.modem.serial.port.reset_input_buffer()
                     self.logger.info("Call ended before timeout (busy/no carrier)")
                     self.stat_panel.increment("rejected_calls")
                     self._stop_waiting()
@@ -243,18 +261,16 @@ class CallPanel(QWidget):
         self.logger.info("Answer timeout, hanging up")
         self.logger.info(f"Current stats: {self.stat_panel.stats}")
         self.stat_panel.increment('rejected_calls')
-        self.modem.serial.send_command("ATH", timeout=2)
-        time.sleep(0.5)
-        self._stop_waiting()
+        self._stop_waiting()  # остановить monitor_timer и answer_timer
+        self.modem.serial.send_command("ATH", timeout=5)
+        time.sleep(1)
+        if self.modem.serial.port and self.modem.serial.port.is_open:
+            self.modem.serial.port.reset_input_buffer()
         self._schedule_next()
-
-    def _stop_waiting(self):
-        if self.monitor_timer and self.monitor_timer.isActive():
-            self.monitor_timer.stop()
-        if self.answer_timer and self.answer_timer.isActive():
-            self.answer_timer.stop()
-
-    def _schedule_next(self):
+        if not self.modem.wait_for_ready():
+            self.logger.error("Modem not ready, stopping calls")
+            self.stop_calling()
+            return
         if self.calling_active:
             delay = self.delay_spin.value()
             if self.delay_unit.currentText() == "min":
@@ -287,7 +303,7 @@ class CallPanel(QWidget):
     def manual_hangup(self):
         self.logger.info("Manual hangup")
         self.modem.serial.send_command("ATH", timeout=2)
-        time.sleep(0.5)
+        time.sleep(1)
         if self.modem.serial.port and self.modem.serial.port.is_open:
             try:
                 self.modem.serial.port.reset_input_buffer()
@@ -309,3 +325,33 @@ class CallPanel(QWidget):
                 main_window.conn_panel.refresh_timer.start(30000)
         except:
             pass
+
+    def _answer_timeout(self):
+        self.logger.info("Answer timeout, hanging up")
+        self.logger.info(f"Current stats: {self.stat_panel.stats}")
+        self.stat_panel.increment('rejected_calls')
+        self._stop_waiting()  # остановить monitor_timer и answer_timer
+        self.modem.serial.send_command("ATH", timeout=5)
+        time.sleep(1)
+        if self.modem.serial.port and self.modem.serial.port.is_open:
+            self.modem.serial.port.reset_input_buffer()
+        self._schedule_next()
+        if hasattr(self, 'monitor_timer') and self.monitor_timer and self.monitor_timer.isActive():
+            self.monitor_timer.stop()
+        if hasattr(self, 'answer_timer') and self.answer_timer and self.answer_timer.isActive():
+            self.answer_timer.stop()
+
+    def _stop_waiting(self):
+        if hasattr(self, 'monitor_timer') and self.monitor_timer and self.monitor_timer.isActive():
+            self.monitor_timer.stop()
+        if hasattr(self, 'answer_timer') and self.answer_timer and self.answer_timer.isActive():
+            self.answer_timer.stop()
+
+    def _schedule_next(self):
+        if self.calling_active:
+            self.call_timer.stop()
+            delay = self.delay_spin.value()
+            if self.delay_unit.currentText() == "min":
+                delay *= 60
+            self.logger.info(f"Scheduling next call in {delay} seconds")
+            self.call_timer.start(delay * 1000)

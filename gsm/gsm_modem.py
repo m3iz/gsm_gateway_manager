@@ -32,6 +32,7 @@ class GsmModem:
                 self.connected = True
                 self.serial.send_command(at.ATE0, timeout=2)
             self.serial.send_command("AT+CVHU=0", timeout=2)
+            self.serial.send_command("AT+CFUN=1", timeout=5)
             self.check_sim_status()
             self.update_network_info()
             return True
@@ -182,3 +183,12 @@ class GsmModem:
         # Wait a bit for modem to send
         time.sleep(0.5)
         return True
+
+    def wait_for_ready(self, timeout=10):
+        start = time.time()
+        while time.time() - start < timeout:
+            resp = self.serial.send_command("AT", timeout=2)
+            if any('OK' in line for line in resp):
+                return True
+            time.sleep(1)
+        return False

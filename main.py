@@ -2,13 +2,13 @@
 """
 GSM Modem Manager - Main entry point.
 """
-import faulthandler
+##import faulthandler
 import sys
 from PyQt6.QtWidgets import QApplication
 from gui.main_window import MainWindow
 
 def main():
-    faulthandler.enable()
+    ##faulthandler.enable()
     app = QApplication(sys.argv)
     
     # Load stylesheet
