@@ -234,12 +234,14 @@ class CallPanel(QWidget):
                 # Detect early end
                 if 'NO CARRIER' in line or 'BUSY' in line:
                     self.logger.info("Call ended before timeout (busy/no carrier)")
+                    self.stat_panel.increment("rejected_calls")
                     self._stop_waiting()
                     self._schedule_next()
                     return
 
     def _answer_timeout(self):
         self.logger.info("Answer timeout, hanging up")
+        self.logger.info(f"Current stats: {self.stat_panel.stats}")
         self.stat_panel.increment('rejected_calls')
         self.modem.serial.send_command("ATH", timeout=2)
         time.sleep(0.5)
