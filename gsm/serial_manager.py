@@ -59,3 +59,18 @@ class SerialManager:
             return responses
         except Exception as e:
             return [f"ERROR: {e}"]
+
+    def get_device_info(self, port_name: str) -> Optional[dict]:
+        """Get detailed information about a specific port."""
+        for port in serial.tools.list_ports.comports():
+            if port.device == port_name:
+                return {
+                    'device': port.device,
+                    'description': port.description,
+                    'manufacturer': port.manufacturer,
+                    'product': port.product,
+                    'vid': port.vid,
+                    'pid': port.pid,
+                    'serial_number': port.serial_number,
+                }
+        return None
