@@ -49,12 +49,14 @@ class CallPanel(QWidget):
         ]
         self.country_combo.addItems(countries)
         self.country_combo.setMinimumWidth(150)
+        self.country_combo.setStyleSheet("QComboBox { border: 1px solid #555; padding: 3px; } QComboBox::drop-down { width: 30px; border-left: 1px solid #555; }")
         self.country_combo.setMaxVisibleItems(10)
         self.country_combo.setEditable(True)
         
         self.phone_input = QLineEdit()
         self.phone_input.setPlaceholderText("Phone number")
         self.phone_input.setMinimumWidth(200)
+        self.phone_input.setStyleSheet("QLineEdit { border: 1px solid #555; padding: 3px; }")
         number_layout.addWidget(self.country_combo)
         number_layout.addWidget(self.phone_input)
         auto_layout.addRow("Number:", number_layout)
