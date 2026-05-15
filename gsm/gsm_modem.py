@@ -41,7 +41,6 @@ class GsmModem:
                 self.serial.send_command(at.ATE0, timeout=2)
                 # Disable auto hangup for voice calls
                 self.serial.send_command("AT+CVHU=0", timeout=2)
-                self.serial.set_rx_callback(self._handle_urc)
                 self.check_sim_status()
                 self.update_network_info()
                 return True
@@ -220,7 +219,7 @@ class GsmModem:
         if not self.connected:
             return False
         cmd = at.ATD.format(number)
-        resp = self.serial.send_command(cmd, expected_response='OK', timeout=10)
+        resp = self.serial.send_command(cmd, expected_response='OK', timeout=15)
         result = any('OK' in line for line in resp)
         print(f"DEBUG dial: cmd={cmd}, resp={resp}, result={result}")
         return result
@@ -346,4 +345,16 @@ class GsmModem:
             except:
                 pass
             time.sleep(0.2)
+        return False
+
+    def is_registered(self) -> bool:
+        """Check if modem is registered to network."""
+        resp = self.serial.send_command("AT+CREG?", timeout=5)
+        for line in resp:
+            if '+CREG:' in line:
+                parts = line.split(',')
+                if len(parts) >= 2:
+                    stat = parts[1].strip()
+                    # 1 = registered home, 5 = registered roaming
+                    return stat in ('1', '5')
         return False

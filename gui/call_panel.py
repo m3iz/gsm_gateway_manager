@@ -144,14 +144,14 @@ class CallPanel(QWidget):
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.logger.info("Call automation stopped")
-        # Hangup any active call and wait for OK
+        # Hangup any active call
         self.modem.serial.send_command("ATH", timeout=2)
         time.sleep(0.5)
         if self.modem.serial.port and self.modem.serial.port.is_open:
-            self.modem.serial.port.reset_input_buffer()
-        # Soft reset modem to clear any stuck state
-        self.modem.serial.send_command("AT+CFUN=1,1", timeout=5)
-        time.sleep(1)
+            try:
+                self.modem.serial.port.reset_input_buffer()
+            except:
+                pass
         self._start_network_timer()
 
     def place_call(self):
@@ -159,8 +159,11 @@ class CallPanel(QWidget):
             return
         # Clean buffer and force hangup before call
         if self.modem.serial.port and self.modem.serial.port.is_open:
-            self.modem.serial.port.reset_input_buffer()
-        self.modem.serial.send_command("ATH", timeout=1)   # ensure idle
+            try:
+                self.modem.serial.port.reset_input_buffer()
+            except:
+                pass
+        self.modem.serial.send_command("ATH", timeout=1)
         time.sleep(0.3)
         number = self.phone_input.text().strip()
         country_text = self.country_combo.currentText()
@@ -173,9 +176,21 @@ class CallPanel(QWidget):
         self.logger.info(f"Dialing {full_number}...")
         self.stat_panel.increment('dial_attempts')
         # Send ATD
-        resp = self.modem.serial.send_command(f"ATD{full_number};", timeout=5)
+        resp = self.modem.serial.send_command(f"ATD{full_number};", timeout=10)
+        if not resp or not any('OK' in line for line in resp):
+            self.logger.error(f"Call failed (no OK), response: {resp}")
+            self.stat_panel.increment('network_errors')
+            # Попытка переподключения к порту
+            self.logger.info("Attempting to reconnect to modem...")
+            port_name = self.modem.serial.port.port
+            self.modem.disconnect()
+            time.sleep(1)
+            self.modem.connect(port_name, 115200)
+            time.sleep(1)
+            self._schedule_next()
+            return
         if not any('OK' in line for line in resp):
-            self.logger.error("Call failed (no OK)")
+            self.logger.error(f"Call failed (no OK), response: {resp}")
             self.stat_panel.increment('network_errors')
             self._schedule_next()
             return
@@ -212,7 +227,7 @@ class CallPanel(QWidget):
                             self.stat_panel.increment('successful_calls')
                             self._stop_waiting()
                             # Hangup and wait for OK
-                            resp = self.modem.serial.send_command("ATH", timeout=2)
+                            self.modem.serial.send_command("ATH", timeout=2)
                             time.sleep(0.5)
                             self._schedule_next()
                             return
@@ -226,7 +241,7 @@ class CallPanel(QWidget):
     def _answer_timeout(self):
         self.logger.info("Answer timeout, hanging up")
         self.stat_panel.increment('rejected_calls')
-        resp = self.modem.serial.send_command("ATH", timeout=2)
+        self.modem.serial.send_command("ATH", timeout=2)
         time.sleep(0.5)
         self._stop_waiting()
         self._schedule_next()
@@ -251,10 +266,15 @@ class CallPanel(QWidget):
         number = self.quick_number.text().strip()
         if number:
             if self.modem.serial.port and self.modem.serial.port.is_open:
-                self.modem.serial.port.reset_input_buffer()
+                try:
+                    self.modem.serial.port.reset_input_buffer()
+                except:
+                    pass
             self.logger.info(f"Manual dial {number}")
             self.stat_panel.increment('dial_attempts')
-            success = self.modem.dial(number)
+            resp = self.modem.serial.send_command(f"ATD{number};", timeout=10)
+            success = any('OK' in line for line in resp)
+            print(f"DEBUG dial: cmd=ATD{number};, resp={resp}, result={success}")
             if success:
                 self.logger.info("Call initiated")
                 self.stat_panel.increment('successful_calls')
@@ -267,7 +287,10 @@ class CallPanel(QWidget):
         self.modem.serial.send_command("ATH", timeout=2)
         time.sleep(0.5)
         if self.modem.serial.port and self.modem.serial.port.is_open:
-            self.modem.serial.port.reset_input_buffer()
+            try:
+                self.modem.serial.port.reset_input_buffer()
+            except:
+                pass
 
     def _stop_network_timer(self):
         try:

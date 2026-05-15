@@ -37,7 +37,7 @@ class ConnectionPanel(QWidget):
         self.init_ui()
         self.refresh_timer = QTimer()
         self.refresh_timer.timeout.connect(self.update_network_display)
-        self.refresh_timer.start(30000)
+        self.refresh_timer.start(5000)
         self.refresh_ports()
 
     def init_ui(self):
@@ -50,8 +50,9 @@ class ConnectionPanel(QWidget):
         conn_layout = QVBoxLayout()
         port_row = QHBoxLayout()
         self.port_combo = QComboBox()
-        self.port_combo.setMinimumWidth(150)
+        self.port_combo.setMinimumWidth(250)
         self.refresh_ports_btn = QPushButton("Refresh")
+        self.refresh_ports_btn.setFixedWidth(80)
         self.refresh_ports_btn.clicked.connect(self.refresh_ports)
         port_row.addWidget(QLabel("Port:"))
         port_row.addWidget(self.port_combo)
@@ -97,16 +98,16 @@ class ConnectionPanel(QWidget):
         self.error_label.hide()
 
         row = 0
-        status_layout.addWidget(QLabel("Status:   "), row, 0)
+        status_layout.addWidget(QLabel("Status:"), row, 0)
         status_layout.addWidget(self.conn_status, row, 1); row += 1
-        status_layout.addWidget(QLabel("RSSI:   "), row, 0)
+        status_layout.addWidget(QLabel("RSSI:"), row, 0)
         status_layout.addWidget(self.signal_bar, row, 1)
         status_layout.addWidget(self.signal_percent_label, row, 2); row += 1
-        status_layout.addWidget(QLabel("Operator:   "), row, 0)
+        status_layout.addWidget(QLabel("Operator:"), row, 0)
         status_layout.addWidget(self.operator_label, row, 1, 1, 2); row += 1
-        status_layout.addWidget(QLabel("Operator Code:   "), row, 0)
+        status_layout.addWidget(QLabel("Operator Code:"), row, 0)
         status_layout.addWidget(self.operator_code_label, row, 1, 1, 2); row += 1
-        status_layout.addWidget(QLabel("SIM:   "), row, 0)
+        status_layout.addWidget(QLabel("SIM:"), row, 0)
         status_layout.addWidget(self.sim_status_label, row, 1, 1, 2); row += 1
 
         self.pin_btn = QPushButton("Enter PIN")
@@ -133,32 +134,19 @@ class ConnectionPanel(QWidget):
         cmd_layout.addWidget(self.cops_btn)
         cmd_group.setLayout(cmd_layout)
         layout.addWidget(cmd_group)
+
         self.setLayout(layout)
 
     def refresh_ports(self):
         self.port_combo.clear()
         all_ports = self.modem.serial.get_available_ports()
-        
-        TARGET_VID = 0x0403
-        TARGET_PID = 0x6001
-        
-        filtered_ports = []
-        for port_name in all_ports:
-            info = self.modem.serial.get_device_info(port_name)
-            if info:
-                if info.get('vid') == TARGET_VID and info.get('pid') == TARGET_PID:
-                    display_name = "NX-ICE"
-                    if info.get('product'):
-                        display_name = f"{info['product']}"
-                    filtered_ports.append((port_name, display_name))
-        
-        if filtered_ports:
-            for port_name, display_name in filtered_ports:
-                self.port_combo.addItem(display_name, port_name)
+        if all_ports:
+            for port in all_ports:
+                self.port_combo.addItem(port, port)
             if self.port_combo.count() > 0:
                 self.port_combo.setCurrentIndex(0)
         else:
-            self.port_combo.addItem("No NX-ICE devices found")
+            self.port_combo.addItem("No ports found")
 
     def toggle_connection(self):
         if self.modem.connected:
@@ -173,8 +161,8 @@ class ConnectionPanel(QWidget):
             self.logger.info("Disconnected from modem")
         else:
             port = self.port_combo.currentData()
-            if not port or "No NX-ICE" in self.port_combo.currentText():
-                QMessageBox.warning(self, "No Device", "No NX-ICE device selected!")
+            if not port or "No ports" in self.port_combo.currentText():
+                QMessageBox.warning(self, "No Port", "No port selected!")
                 return
             baudrate = int(self.baud_combo.currentText())
             self.logger.info(f"Connecting to {port} at {baudrate} baud...")
