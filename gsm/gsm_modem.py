@@ -1,9 +1,13 @@
 """
 High-level GSM modem controller.
 """
+import cmd
 import threading
 import time
 from typing import Optional, Callable, List
+from unittest import result
+
+from numpy import number
 from .serial_manager import SerialManager
 from utils.logger import Logger
 from . import at_commands as at
@@ -217,7 +221,9 @@ class GsmModem:
             return False
         cmd = at.ATD.format(number)
         resp = self.serial.send_command(cmd, expected_response='OK', timeout=10)
-        return any('OK' in line for line in resp)
+        result = any('OK' in line for line in resp)
+        print(f"DEBUG dial: cmd={cmd}, resp={resp}, result={result}")
+        return result
 
     def hangup(self):
         if self.connected:

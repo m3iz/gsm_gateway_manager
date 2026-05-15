@@ -51,7 +51,6 @@ class StatisticsPanel(QWidget):
         self.reset_btn.clicked.connect(self.reset_stats)
         layout.addWidget(self.reset_btn)
 
-        # Set a reasonable maximum width to keep it compact but not too narrow
         self.setMaximumWidth(350)
         self.setLayout(layout)
 
@@ -62,8 +61,6 @@ class StatisticsPanel(QWidget):
     def increment(self, key, count=1):
         if key in self.stats:
             self.stats[key] += count
-        if key in self.stats:
-            self.stats[key] += 1
 
     def reset_stats(self):
         for key in self.stats:

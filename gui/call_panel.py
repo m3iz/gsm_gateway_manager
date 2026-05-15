@@ -198,6 +198,7 @@ class CallPanel(QWidget):
             self.logger.info(f"Manual dial {number}")
             self.stat_panel.increment('dial_attempts')
             success = self.modem.dial(number)
+            print(f"DEBUG: dial returned {success}")
             if success:
                 self.logger.info("Call initiated")
                 self.stat_panel.increment('successful_calls')
