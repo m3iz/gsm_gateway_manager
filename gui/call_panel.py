@@ -2,7 +2,7 @@ import time
 import re
 from PyQt6.QtWidgets import (QWidget, QVBoxLayout, QHBoxLayout, QGroupBox,
                              QComboBox, QLineEdit, QSpinBox, QPushButton,
-                             QLabel, QFormLayout, QCheckBox)
+                             QLabel, QFormLayout)
 from PyQt6.QtCore import Qt, QTimer
 
 class CallPanel(QWidget):
@@ -14,7 +14,8 @@ class CallPanel(QWidget):
         self.calling_active = False
         self.call_timer = QTimer()
         self.call_timer.timeout.connect(self.place_call)
-        self.aggressive = False
+        self.monitor_timer = None
+        self.answer_timer = None
         self.init_ui()
 
     def init_ui(self):
@@ -22,7 +23,6 @@ class CallPanel(QWidget):
         layout.setContentsMargins(3, 3, 3, 3)
         layout.setSpacing(3)
 
-        # Call Automation Group
         auto_group = QGroupBox("Call Automation")
         auto_layout = QFormLayout()
         auto_layout.setSpacing(3)
@@ -70,11 +70,18 @@ class CallPanel(QWidget):
         delay_layout.addWidget(self.delay_spin)
         delay_layout.addWidget(self.delay_unit)
         delay_layout.addStretch()
-        auto_layout.addRow("Delay:", delay_layout)
+        auto_layout.addRow("Delay between calls:", delay_layout)
 
-        self.aggressive_checkbox = QCheckBox("Aggressive dialing (force hangup after 3 sec)")
-        self.aggressive_checkbox.toggled.connect(self.on_aggressive_toggled)
-        auto_layout.addRow("", self.aggressive_checkbox)
+        # Answer timeout
+        answer_layout = QHBoxLayout()
+        self.answer_timeout_spin = QSpinBox()
+        self.answer_timeout_spin.setRange(5, 300)
+        self.answer_timeout_spin.setValue(30)
+        self.answer_timeout_spin.setFixedWidth(80)
+        answer_layout.addWidget(self.answer_timeout_spin)
+        answer_layout.addWidget(QLabel("sec"))
+        answer_layout.addStretch()
+        auto_layout.addRow("Answer timeout:", answer_layout)
 
         btn_layout = QHBoxLayout()
         self.start_btn = QPushButton("Start")
@@ -90,7 +97,6 @@ class CallPanel(QWidget):
         auto_group.setLayout(auto_layout)
         layout.addWidget(auto_group)
 
-        # Manual Call Group
         manual_group = QGroupBox("Manual Call")
         manual_layout = QHBoxLayout()
         self.quick_number = QLineEdit()
@@ -106,9 +112,6 @@ class CallPanel(QWidget):
         layout.addWidget(manual_group)
 
         self.setLayout(layout)
-
-    def on_aggressive_toggled(self, checked):
-        self.aggressive = checked
 
     def toggle_calling(self):
         if not self.modem.connected:
@@ -133,25 +136,32 @@ class CallPanel(QWidget):
 
     def stop_calling(self):
         self.calling_active = False
-        if hasattr(self, '_aggressive_timer'):
-            self._aggressive_timer.stop()
+        if self.monitor_timer and self.monitor_timer.isActive():
+            self.monitor_timer.stop()
+        if self.answer_timer and self.answer_timer.isActive():
+            self.answer_timer.stop()
         self.call_timer.stop()
         self.start_btn.setEnabled(True)
         self.stop_btn.setEnabled(False)
         self.logger.info("Call automation stopped")
-        # Hangup any active call
+        # Hangup any active call and wait for OK
         self.modem.serial.send_command("ATH", timeout=2)
         time.sleep(0.5)
         if self.modem.serial.port and self.modem.serial.port.is_open:
             self.modem.serial.port.reset_input_buffer()
+        # Soft reset modem to clear any stuck state
+        self.modem.serial.send_command("AT+CFUN=1,1", timeout=5)
+        time.sleep(1)
         self._start_network_timer()
 
     def place_call(self):
         if not self.calling_active:
             return
-        # Clean buffer before call
+        # Clean buffer and force hangup before call
         if self.modem.serial.port and self.modem.serial.port.is_open:
             self.modem.serial.port.reset_input_buffer()
+        self.modem.serial.send_command("ATH", timeout=1)   # ensure idle
+        time.sleep(0.3)
         number = self.phone_input.text().strip()
         country_text = self.country_combo.currentText()
         match = re.search(r'\+?(\d+)$', country_text)
@@ -162,30 +172,77 @@ class CallPanel(QWidget):
             full_number = number
         self.logger.info(f"Dialing {full_number}...")
         self.stat_panel.increment('dial_attempts')
-        # Send ATD command without waiting for response
-        self.modem.serial.send_command(f"ATD{full_number};", timeout=2)
-        if self.aggressive:
-            self.logger.info("Aggressive mode: will force hangup in 3 sec")
-            self._aggressive_timer = QTimer()
-            self._aggressive_timer.setSingleShot(True)
-            self._aggressive_timer.timeout.connect(self.aggressive_hangup)
-            self._aggressive_timer.start(3000)
-        else:
-            # Normal mode: wait 10 sec then hangup
-            QTimer.singleShot(10000, self.modem.hangup)
-        # Schedule next call if still active
+        # Send ATD
+        resp = self.modem.serial.send_command(f"ATD{full_number};", timeout=5)
+        if not any('OK' in line for line in resp):
+            self.logger.error("Call failed (no OK)")
+            self.stat_panel.increment('network_errors')
+            self._schedule_next()
+            return
+        self.logger.info("Call initiated, waiting for answer...")
+        # Start answer timeout timer
+        timeout_sec = self.answer_timeout_spin.value()
+        self.answer_timer = QTimer()
+        self.answer_timer.setSingleShot(True)
+        self.answer_timer.timeout.connect(self._answer_timeout)
+        self.answer_timer.start(timeout_sec * 1000)
+        # Start monitoring URC for connected
+        self.monitor_timer = QTimer()
+        self.monitor_timer.timeout.connect(self._monitor_call)
+        self.monitor_timer.start(300)
+
+    def _monitor_call(self):
+        if not self.calling_active:
+            if self.monitor_timer:
+                self.monitor_timer.stop()
+            return
+        if self.modem.serial.port and self.modem.serial.port.in_waiting:
+            while self.modem.serial.port.in_waiting:
+                line = self.modem.serial.port.readline().decode('utf-8', errors='ignore').strip()
+                if not line:
+                    continue
+                self.logger.rx(line)
+                # Detect connected (state 0)
+                if '+CLCC:' in line:
+                    parts = line.split(',')
+                    if len(parts) >= 3:
+                        state = parts[2].strip()
+                        if state == '0':
+                            self.logger.info("Call answered (connected)!")
+                            self.stat_panel.increment('successful_calls')
+                            self._stop_waiting()
+                            # Hangup and wait for OK
+                            resp = self.modem.serial.send_command("ATH", timeout=2)
+                            time.sleep(0.5)
+                            self._schedule_next()
+                            return
+                # Detect early end
+                if 'NO CARRIER' in line or 'BUSY' in line:
+                    self.logger.info("Call ended before timeout (busy/no carrier)")
+                    self._stop_waiting()
+                    self._schedule_next()
+                    return
+
+    def _answer_timeout(self):
+        self.logger.info("Answer timeout, hanging up")
+        self.stat_panel.increment('rejected_calls')
+        resp = self.modem.serial.send_command("ATH", timeout=2)
+        time.sleep(0.5)
+        self._stop_waiting()
+        self._schedule_next()
+
+    def _stop_waiting(self):
+        if self.monitor_timer and self.monitor_timer.isActive():
+            self.monitor_timer.stop()
+        if self.answer_timer and self.answer_timer.isActive():
+            self.answer_timer.stop()
+
+    def _schedule_next(self):
         if self.calling_active:
             delay = self.delay_spin.value()
             if self.delay_unit.currentText() == "min":
                 delay *= 60
             self.call_timer.start(delay * 1000)
-
-    def aggressive_hangup(self):
-        self.logger.info("Aggressive mode: hanging up now")
-        self.modem.serial.send_command("ATH", timeout=2)
-        time.sleep(0.5)
-        if self.modem.serial.port and self.modem.serial.port.is_open:
-            self.modem.serial.port.reset_input_buffer()
 
     def manual_dial(self):
         if not self.modem.connected:
@@ -198,7 +255,6 @@ class CallPanel(QWidget):
             self.logger.info(f"Manual dial {number}")
             self.stat_panel.increment('dial_attempts')
             success = self.modem.dial(number)
-            print(f"DEBUG: dial returned {success}")
             if success:
                 self.logger.info("Call initiated")
                 self.stat_panel.increment('successful_calls')
