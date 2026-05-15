@@ -45,7 +45,6 @@ class ATConsole(QWidget):
         self.setLayout(layout)
 
         # Connect modem URC callback
-        self.modem.register_urc_callback(self.on_urc)
 
     def send_command(self):
         if not self.modem.connected:

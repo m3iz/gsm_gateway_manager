@@ -35,6 +35,7 @@ class MainWindow(QMainWindow):
 
         self.logger = Logger()
         self.modem = GsmModem()
+        self.modem.set_logger(self.logger)
 
         self.setup_menus()
         self.setup_central()
