@@ -31,9 +31,10 @@ class GsmModem:
             if any('OK' in line for line in resp):
                 self.connected = True
                 self.serial.send_command(at.ATE0, timeout=2)
-                self.check_sim_status()
-                self.update_network_info()
-                return True
+            self.serial.send_command("AT+CVHU=0", timeout=2)
+            self.check_sim_status()
+            self.update_network_info()
+            return True
             time.sleep(1)
         self.serial.disconnect()
         self.last_error = "No response to AT command"
@@ -170,10 +171,14 @@ class GsmModem:
     def send_sms(self, number: str, text: str) -> bool:
         if not self.connected:
             return False
+        # Set text mode
         self.serial.send_command(at.AT_CMGF.format(1), timeout=3)
+        # Send command
         cmd = at.AT_CMGS.format(number)
         self.serial.send_command(cmd, timeout=5)
+        # Send message text and Ctrl+Z
         self.serial.port.write((text + '\x1A').encode())
         self.serial.port.flush()
-        time.sleep(1)
+        # Wait a bit for modem to send
+        time.sleep(0.5)
         return True
