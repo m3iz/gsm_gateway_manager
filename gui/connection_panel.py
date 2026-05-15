@@ -134,7 +134,10 @@ class ConnectionPanel(QWidget):
         cmd_group.setLayout(cmd_layout)
         layout.addWidget(cmd_group)
         self.setLayout(layout)
-
+    def check_sim_and_pin(self):
+        status = self.modem.check_sim_status()
+        self.logger.info(f"SIM status: {status}")
+        self.update_sim_ui(status)    
     def refresh_ports(self):
         self.port_combo.clear()
         all_ports = self.modem.serial.get_available_ports()
